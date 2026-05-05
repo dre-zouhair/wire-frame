@@ -1,6 +1,6 @@
 import { Group, Rect, Text } from 'react-konva';
 import type { GroupShapeProps } from './types';
-import { resolveStrokeWidth } from './shared';
+import { resolveFill, resolveStrokeWidth } from './shared';
 
 interface ArtboardShapeProps extends GroupShapeProps {
   onBackgroundMouseDown?: (event: any) => void;
@@ -12,6 +12,7 @@ export default function ArtboardShape({
   draggable = true,
   interactive = true,
   onDragEnd,
+  onDragMove,
   onSelect,
   children,
 }: ArtboardShapeProps) {
@@ -28,6 +29,7 @@ export default function ArtboardShape({
       }}
       onDragMove={(e) => {
         e.cancelBubble = true;
+        onDragMove?.(element.id, e.target.x(), e.target.y(), e.target);
       }}
       onDragEnd={(e) => {
         if (e.target.id() !== element.id) {
@@ -45,7 +47,7 @@ export default function ArtboardShape({
       <Rect
         width={element.width}
         height={element.height}
-        fill="#ffffff"
+        fill={resolveFill(element.fill, element.backgroundColor) ?? '#ffffff'}
         stroke={isSelected ? '#111111' : element.isMasterComponent ? '#a855f7' : '#2f2f2f'}
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
         shadowColor="#000000"

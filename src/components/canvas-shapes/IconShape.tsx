@@ -2,7 +2,7 @@ import { Group, Path, Rect } from 'react-konva';
 import type { ShapeProps } from './types';
 import { resolveStrokeColor } from './shared';
 
-const ICON_PATHS: Record<string, string> = {
+export const ICON_PATHS: Record<string, string> = {
   menu: 'M4 6H20M4 12H20M4 18H20',
   search: 'M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14Zm5.5 12.5L21 21',
   user: 'M12 12a4 4 0 1 0 0-8a4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0',
@@ -28,6 +28,7 @@ export default function IconShape({
   draggable = true,
   interactive = true,
   onDragEnd,
+  onDragMove,
   onSelect,
 }: ShapeProps) {
   const isInteractive = interactive !== false;
@@ -46,6 +47,7 @@ export default function IconShape({
       }}
       onDragMove={(e) => {
         e.cancelBubble = true;
+        onDragMove?.(element.id, e.target.x(), e.target.y(), e.target);
       }}
       onClick={(e) => {
         e.cancelBubble = true;

@@ -1,6 +1,10 @@
 import type { FillStyle, FontSize, FontWeight, TextAlign, WireframeElement } from '@/store/useStore';
 
-export function resolveFill(fill?: FillStyle) {
+export function resolveFill(fill?: FillStyle, backgroundColor?: string) {
+  if (backgroundColor) {
+    return backgroundColor;
+  }
+
   switch (fill) {
     case 'solid':
       return '#4b5563';
@@ -32,8 +36,16 @@ export function resolveReadableTextColor(fill?: FillStyle) {
   return fill === 'solid' ? '#ffffff' : '#2f2f2f';
 }
 
+export function resolveTextColor(textColor?: string, fill?: FillStyle) {
+  if (textColor) {
+    return textColor;
+  }
+
+  return resolveReadableTextColor(fill);
+}
+
 export function resolveStrokeColor(
-  element: Pick<WireframeElement, 'isMasterComponent'>,
+  element: Pick<WireframeElement, 'isMasterComponent' | 'strokeColor'>,
   isSelected: boolean,
   fallback: string
 ) {
@@ -41,5 +53,13 @@ export function resolveStrokeColor(
     return '#a855f7';
   }
 
-  return isSelected ? '#111111' : fallback;
+  if (isSelected) {
+    return '#111111';
+  }
+
+  if (element.strokeColor) {
+    return element.strokeColor;
+  }
+
+  return fallback;
 }

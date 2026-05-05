@@ -8,6 +8,7 @@ export default function DividerShape({
   draggable = true,
   interactive = true,
   onDragEnd,
+  onDragMove,
   onSelect,
 }: ShapeProps) {
   const isInteractive = interactive !== false;
@@ -28,6 +29,7 @@ export default function DividerShape({
       }}
       onDragMove={(e) => {
         e.cancelBubble = true;
+        onDragMove?.(element.id, e.target.x(), e.target.y(), e.target);
       }}
       onClick={(e) => {
         e.cancelBubble = true;

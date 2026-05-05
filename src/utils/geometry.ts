@@ -1,4 +1,5 @@
 import type { WireframeElement } from '@/store/useStore';
+import { canContainChild, isSemanticContainerType } from './semantic-html';
 
 export interface Point {
   x: number;
@@ -25,7 +26,10 @@ export function isAutoLayoutContainer(element: WireframeElement | null | undefin
 
   return (
     (element.layoutMode ?? 'absolute') !== 'absolute' &&
-    (element.type === 'artboard' || element.type === 'container' || element.type === 'box')
+    (element.type === 'artboard' ||
+      element.type === 'container' ||
+      element.type === 'box' ||
+      isSemanticContainerType(element.type))
   );
 }
 
@@ -165,7 +169,12 @@ export function getCompositeBounds(
   lookup: Map<string, WireframeElement>
 ): RectBounds {
   const ownBounds = getAbsoluteRect(element, lookup);
-  if (element.type !== 'artboard' && element.type !== 'container' && element.type !== 'box') {
+  if (
+    element.type !== 'artboard' &&
+    element.type !== 'container' &&
+    element.type !== 'box' &&
+    !isSemanticContainerType(element.type)
+  ) {
     return ownBounds;
   }
 
@@ -194,6 +203,7 @@ export function findBestDropParent(
   bounds: RectBounds
 ) {
   const lookup = buildElementLookup(elements);
+  const moving = lookup.get(movingId) ?? null;
   const movingDescendants = new Set(getDescendants(elements, movingId).map((element) => element.id));
   let best: { element: WireframeElement; area: number } | null = null;
   const center = {
@@ -206,7 +216,16 @@ export function findBestDropParent(
       continue;
     }
 
-    if (element.type !== 'artboard' && element.type !== 'container' && element.type !== 'box') {
+    if (
+      element.type !== 'artboard' &&
+      element.type !== 'container' &&
+      element.type !== 'box' &&
+      !isSemanticContainerType(element.type)
+    ) {
+      continue;
+    }
+
+    if (moving && !canContainChild(element.type, moving.type)) {
       continue;
     }
 
