@@ -18,6 +18,17 @@ export function getElementChildren(elements: WireframeElement[], parentId: strin
   return elements.filter((element) => element.parentId === parentId);
 }
 
+export function isAutoLayoutContainer(element: WireframeElement | null | undefined) {
+  if (!element) {
+    return false;
+  }
+
+  return (
+    (element.layoutMode ?? 'absolute') !== 'absolute' &&
+    (element.type === 'artboard' || element.type === 'container' || element.type === 'box')
+  );
+}
+
 export function getDescendants(elements: WireframeElement[], parentId: string) {
   const lookup = buildElementLookup(elements);
   const descendants: WireframeElement[] = [];
@@ -148,6 +159,77 @@ export function calculateBoundingBox(
   return bounds;
 }
 
+export function getCompositeBounds(
+  element: WireframeElement,
+  elements: WireframeElement[],
+  lookup: Map<string, WireframeElement>
+): RectBounds {
+  const ownBounds = getAbsoluteRect(element, lookup);
+  if (element.type !== 'artboard' && element.type !== 'container' && element.type !== 'box') {
+    return ownBounds;
+  }
+
+  const descendantIds = getDescendants(elements, element.id).map((descendant) => descendant.id);
+  const descendantsBounds = calculateBoundingBox(descendantIds, lookup);
+  if (!descendantsBounds) {
+    return ownBounds;
+  }
+
+  const minX = Math.min(ownBounds.x, descendantsBounds.x);
+  const minY = Math.min(ownBounds.y, descendantsBounds.y);
+  const maxX = Math.max(ownBounds.x + ownBounds.width, descendantsBounds.x + descendantsBounds.width);
+  const maxY = Math.max(ownBounds.y + ownBounds.height, descendantsBounds.y + descendantsBounds.height);
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
+export function getLayoutChildPosition(
+  parent: WireframeElement,
+  siblings: WireframeElement[],
+  child: WireframeElement,
+  index: number
+) {
+  const layoutMode = parent.layoutMode ?? 'absolute';
+  if (layoutMode === 'absolute') {
+    return { x: child.x, y: child.y };
+  }
+
+  const gap = parent.gap ?? 0;
+  const padding = parent.padding ?? 0;
+  const align = parent.align ?? 'start';
+
+  if (layoutMode === 'vertical') {
+    const contentWidth = Math.max(0, parent.width - padding * 2);
+    const y = padding + siblings.slice(0, index).reduce((sum, sibling) => sum + sibling.height + gap, 0);
+    let x = padding;
+
+    if (align === 'center') {
+      x = padding + Math.max(0, (contentWidth - child.width) / 2);
+    } else if (align === 'end') {
+      x = padding + Math.max(0, contentWidth - child.width);
+    }
+
+    return { x, y };
+  }
+
+  const contentHeight = Math.max(0, parent.height - padding * 2);
+  const x = padding + siblings.slice(0, index).reduce((sum, sibling) => sum + sibling.width + gap, 0);
+  let y = padding;
+
+  if (align === 'center') {
+    y = padding + Math.max(0, (contentHeight - child.height) / 2);
+  } else if (align === 'end') {
+    y = padding + Math.max(0, contentHeight - child.height);
+  }
+
+  return { x, y };
+}
+
 export function findBestDropParent(
   elements: WireframeElement[],
   movingId: string,
@@ -170,7 +252,7 @@ export function findBestDropParent(
       continue;
     }
 
-    const candidateBounds = getAbsoluteRect(element, lookup);
+    const candidateBounds = getCompositeBounds(element, elements, lookup);
     if (!rectContainsPoint(candidateBounds, center)) {
       continue;
     }

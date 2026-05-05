@@ -1,5 +1,6 @@
 import { Group, Rect } from 'react-konva';
 import type { GroupShapeProps } from './types';
+import { resolveFill, resolveStrokeWidth } from './shared';
 
 export default function BoxShape({
   element,
@@ -8,6 +9,7 @@ export default function BoxShape({
   onDragEnd,
   onSelect,
   children,
+  visualBounds,
 }: GroupShapeProps) {
   return (
     <Group
@@ -15,14 +17,23 @@ export default function BoxShape({
       x={element.x}
       y={element.y}
       draggable={draggable}
+      onDragStart={(e) => {
+        e.cancelBubble = true;
+      }}
+      onDragMove={(e) => {
+        e.cancelBubble = true;
+      }}
       onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
     >
       <Rect
-        width={element.width}
-        height={element.height}
-        fill="#ffffff"
+        x={visualBounds?.x ?? 0}
+        y={visualBounds?.y ?? 0}
+        width={visualBounds?.width ?? element.width}
+        height={visualBounds?.height ?? element.height}
+        fill={resolveFill(element.fill)}
         stroke={isSelected ? '#111111' : '#333333'}
-        strokeWidth={2}
+        strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
+        cornerRadius={element.borderRadius ?? 0}
         onClick={(e) => {
           e.cancelBubble = true;
           onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);

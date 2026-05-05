@@ -1,5 +1,12 @@
 import { Group, Rect, Text } from 'react-konva';
 import type { ShapeProps } from './types';
+import {
+  resolveFontSize,
+  resolveFontStyle,
+  resolveKonvaAlign,
+  resolveReadableTextColor,
+  resolveStrokeWidth,
+} from './shared';
 
 export default function CheckboxShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
   const boxSize = 16;
@@ -10,6 +17,12 @@ export default function CheckboxShape({ element, isSelected, draggable = true, o
       x={element.x}
       y={element.y}
       draggable={draggable}
+      onDragStart={(e) => {
+        e.cancelBubble = true;
+      }}
+      onDragMove={(e) => {
+        e.cancelBubble = true;
+      }}
       onClick={(e) => {
         e.cancelBubble = true;
         onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
@@ -27,7 +40,7 @@ export default function CheckboxShape({ element, isSelected, draggable = true, o
         height={boxSize}
         fill="#ffffff"
         stroke={isSelected ? '#111111' : '#555555'}
-        strokeWidth={1}
+        strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
       />
       {element.checked ? (
         <Rect x={4} y={8} width={8} height={8} fill="#111111" />
@@ -38,10 +51,11 @@ export default function CheckboxShape({ element, isSelected, draggable = true, o
         width={Math.max(0, element.width - 24)}
         height={element.height}
         text={element.text ?? 'Checkbox'}
-        fontSize={14}
+        fontSize={resolveFontSize(element.fontSize, 16)}
+        fontStyle={resolveFontStyle(element.fontWeight)}
         fontFamily="Arial, sans-serif"
-        fill="#2f2f2f"
-        align="left"
+        fill={resolveReadableTextColor(element.fill)}
+        align={resolveKonvaAlign(element.textAlign ?? 'left')}
         verticalAlign="middle"
       />
     </Group>

@@ -5,6 +5,9 @@ import type Konva from 'konva';
 import { useStore, type ElementType, type WireframeElement } from '@/store/useStore';
 import BoxShape from './canvas-shapes/BoxShape';
 import ButtonShape from './canvas-shapes/ButtonShape';
+import IconShape from './canvas-shapes/IconShape';
+import AvatarShape from './canvas-shapes/AvatarShape';
+import TableShape from './canvas-shapes/TableShape';
 import CheckboxShape from './canvas-shapes/CheckboxShape';
 import ContainerShape from './canvas-shapes/ContainerShape';
 import DividerShape from './canvas-shapes/DividerShape';
@@ -17,9 +20,11 @@ import ArtboardShape from './canvas-shapes/ArtboardShape';
 import {
   buildElementLookup,
   findBestDropParent,
-  getAbsoluteRect,
   getAbsolutePosition,
+  getDescendants,
   getElementChildren,
+  getLayoutChildPosition,
+  isAutoLayoutContainer,
   rectsIntersect,
 } from '@/utils/geometry';
 
@@ -40,6 +45,9 @@ const leafShapes: Partial<Record<Exclude<ElementType, 'artboard' | 'container'>,
     checkbox: CheckboxShape,
     dropdown: DropdownShape,
     'image-placeholder': ImagePlaceholderShape,
+    icon: IconShape,
+    avatar: AvatarShape,
+    table: TableShape,
   };
 
 const transformableTypes = new Set<ElementType>([
@@ -53,6 +61,9 @@ const transformableTypes = new Set<ElementType>([
   'checkbox',
   'dropdown',
   'image-placeholder',
+  'icon',
+  'avatar',
+  'table',
 ]);
 
 interface Point {
@@ -87,8 +98,20 @@ function buildVisibleRectMap(elements: WireframeElement[]) {
   const lookup = buildElementLookup(elements);
   const rects = new Map<string, { x: number; y: number; width: number; height: number }>();
 
-  const visit = (element: WireframeElement) => {
-    const absolute = getAbsoluteRect(element, lookup);
+  const visit = (element: WireframeElement, parentAbsolute = { x: 0, y: 0 }) => {
+    const parent = element.parentId ? lookup.get(element.parentId) ?? null : null;
+    const siblings = parent ? getElementChildren(elements, parent.id) : [];
+    const index = siblings.findIndex((child) => child.id === element.id);
+    const relative =
+      parent && isAutoLayoutContainer(parent) && index >= 0
+        ? getLayoutChildPosition(parent, siblings, element, index)
+        : { x: element.x, y: element.y };
+
+    const absolute = {
+      x: parentAbsolute.x + relative.x,
+      y: parentAbsolute.y + relative.y,
+    };
+
     rects.set(element.id, {
       x: absolute.x,
       y: absolute.y,
@@ -97,7 +120,7 @@ function buildVisibleRectMap(elements: WireframeElement[]) {
     });
 
     for (const child of getElementChildren(elements, element.id)) {
-      visit(child);
+      visit(child, absolute);
     }
   };
 
@@ -105,7 +128,57 @@ function buildVisibleRectMap(elements: WireframeElement[]) {
     visit(element);
   }
 
+  for (const element of elements.filter(
+    (item) => item.type === 'container' || item.type === 'box'
+  )) {
+    const bounds = getVisualBoundsForContainer(element, elements, rects);
+    const absolute = rects.get(element.id);
+    if (!absolute) {
+      continue;
+    }
+
+    rects.set(element.id, {
+      x: absolute.x + bounds.x,
+      y: absolute.y + bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+    });
+  }
+
   return rects;
+}
+
+function getVisualBoundsForContainer(
+  element: WireframeElement,
+  elements: WireframeElement[],
+  renderedRects: Map<string, { x: number; y: number; width: number; height: number }>
+) {
+  const lookup = buildElementLookup(elements);
+  const elementAbsolute = getAbsolutePosition(element, lookup);
+
+  let minX = 0;
+  let minY = 0;
+  let maxX = element.width;
+  let maxY = element.height;
+
+  for (const descendant of getDescendants(elements, element.id)) {
+    const rect = renderedRects.get(descendant.id);
+    if (!rect) {
+      continue;
+    }
+
+    minX = Math.min(minX, rect.x - elementAbsolute.x);
+    minY = Math.min(minY, rect.y - elementAbsolute.y);
+    maxX = Math.max(maxX, rect.x - elementAbsolute.x + rect.width);
+    maxY = Math.max(maxY, rect.y - elementAbsolute.y + rect.height);
+  }
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
 }
 
 export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps) {
@@ -411,23 +484,31 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
     transformElement(element.id, node.x(), node.y(), nextWidth, nextHeight, scaleX, scaleY);
   };
 
-  const renderNode = (element: WireframeElement): ReactNode => {
+  const renderNode = (element: WireframeElement, parent: WireframeElement | null = null): ReactNode => {
     const isSelected = selectedIds.includes(element.id);
     const children = getElementChildren(elements, element.id);
-    const parent = element.parentId ? elementById.get(element.parentId) ?? null : null;
+    const siblings = parent ? getElementChildren(elements, parent.id) : [];
+    const index = siblings.findIndex((child) => child.id === element.id);
+    const displayElement =
+      parent && isAutoLayoutContainer(parent) && index >= 0
+        ? {
+            ...element,
+            ...getLayoutChildPosition(parent, siblings, element, index),
+          }
+        : element;
     const draggable = !parent || (parent.layoutMode ?? 'absolute') === 'absolute';
 
     if (element.type === 'artboard') {
       return (
         <ArtboardShape
           key={element.id}
-          element={element}
+          element={displayElement}
           isSelected={isSelected}
           draggable={draggable}
           onDragEnd={handleDragEnd}
           onSelect={handleSelect}
         >
-          {children.map((child) => renderNode(child))}
+          {children.map((child) => renderNode(child, element))}
         </ArtboardShape>
       );
     }
@@ -436,13 +517,14 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
       return (
         <ContainerShape
           key={element.id}
-          element={element}
+          element={displayElement}
           isSelected={isSelected}
           draggable={draggable}
           onDragEnd={handleDragEnd}
           onSelect={handleSelect}
+          visualBounds={getVisualBoundsForContainer(element, elements, renderedRects)}
         >
-          {children.map((child) => renderNode(child))}
+          {children.map((child) => renderNode(child, element))}
         </ContainerShape>
       );
     }
@@ -451,13 +533,14 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
       return (
         <BoxShape
           key={element.id}
-          element={element}
+          element={displayElement}
           isSelected={isSelected}
           draggable={draggable}
           onDragEnd={handleDragEnd}
           onSelect={handleSelect}
+          visualBounds={getVisualBoundsForContainer(element, elements, renderedRects)}
         >
-          {children.map((child) => renderNode(child))}
+          {children.map((child) => renderNode(child, element))}
         </BoxShape>
       );
     }
@@ -470,7 +553,7 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
     return (
       <ShapeComponent
         key={element.id}
-        element={element}
+        element={displayElement}
         isSelected={isSelected}
         draggable={draggable}
         onDragEnd={handleDragEnd}
@@ -526,7 +609,7 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
       }}
     >
       <Layer>
-        {rootArtboards.map((artboard) => renderNode(artboard))}
+        {rootArtboards.map((artboard) => renderNode(artboard, null))}
         {selectionRect ? (
           <Rect
             x={selectionRect.x}

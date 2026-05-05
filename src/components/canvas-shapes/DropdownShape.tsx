@@ -1,5 +1,13 @@
 import { Group, Rect, RegularPolygon, Text } from 'react-konva';
 import type { ShapeProps } from './types';
+import {
+  resolveFill,
+  resolveFontSize,
+  resolveFontStyle,
+  resolveKonvaAlign,
+  resolveReadableTextColor,
+  resolveStrokeWidth,
+} from './shared';
 
 export default function DropdownShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
   return (
@@ -8,6 +16,12 @@ export default function DropdownShape({ element, isSelected, draggable = true, o
       x={element.x}
       y={element.y}
       draggable={draggable}
+      onDragStart={(e) => {
+        e.cancelBubble = true;
+      }}
+      onDragMove={(e) => {
+        e.cancelBubble = true;
+      }}
       onClick={(e) => {
         e.cancelBubble = true;
         onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
@@ -21,10 +35,10 @@ export default function DropdownShape({ element, isSelected, draggable = true, o
       <Rect
         width={element.width}
         height={element.height}
-        fill="#ffffff"
+        fill={resolveFill(element.fill)}
         stroke={isSelected ? '#111111' : '#8a8a8a'}
-        strokeWidth={1}
-        cornerRadius={3}
+        strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
+        cornerRadius={element.borderRadius ?? 3}
         shadowEnabled={isSelected}
         shadowColor="#000000"
         shadowBlur={12}
@@ -36,10 +50,11 @@ export default function DropdownShape({ element, isSelected, draggable = true, o
         width={element.width - 28}
         height={element.height}
         text={element.text ?? 'Dropdown'}
-        fontSize={14}
+        fontSize={resolveFontSize(element.fontSize, 16)}
+        fontStyle={resolveFontStyle(element.fontWeight)}
         fontFamily="Arial, sans-serif"
-        fill="#2f2f2f"
-        align="left"
+        fill={resolveReadableTextColor(element.fill)}
+        align={resolveKonvaAlign(element.textAlign ?? 'left')}
         verticalAlign="middle"
       />
       <RegularPolygon
@@ -47,7 +62,7 @@ export default function DropdownShape({ element, isSelected, draggable = true, o
         y={element.height / 2 - 1}
         sides={3}
         radius={5}
-        fill="#666666"
+        fill={resolveReadableTextColor(element.fill)}
         rotation={180}
       />
     </Group>

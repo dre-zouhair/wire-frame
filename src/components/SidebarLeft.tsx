@@ -24,6 +24,9 @@ const componentItems: Array<{ type: ElementType; label: string; icon: ReactNode 
   { type: 'checkbox', label: 'Checkbox', icon: <CheckSquare className="h-4 w-4" /> },
   { type: 'dropdown', label: 'Dropdown', icon: <ChevronDown className="h-4 w-4" /> },
   { type: 'image-placeholder', label: 'Image', icon: <Image className="h-4 w-4" /> },
+  { type: 'icon', label: 'Icon', icon: <Type className="h-4 w-4" /> },
+  { type: 'avatar', label: 'Avatar', icon: <Image className="h-4 w-4" /> },
+  { type: 'table', label: 'Table', icon: <LayoutGrid className="h-4 w-4" /> },
 ];
 
 function getLayerLabel(type: ElementType, name?: string, text?: string) {
@@ -48,6 +51,12 @@ function getLayerLabel(type: ElementType, name?: string, text?: string) {
       return name ?? text ?? 'Dropdown';
     case 'image-placeholder':
       return name ?? 'Image';
+    case 'icon':
+      return name ?? 'Icon';
+    case 'avatar':
+      return name ?? 'Avatar';
+    case 'table':
+      return name ?? 'Table';
     default:
       return name ?? type;
   }

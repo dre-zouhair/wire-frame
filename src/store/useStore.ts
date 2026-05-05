@@ -24,10 +24,18 @@ export type ElementType =
   | 'input'
   | 'checkbox'
   | 'dropdown'
-  | 'image-placeholder';
+  | 'image-placeholder'
+  | 'icon'
+  | 'avatar'
+  | 'table';
 
 export type LayoutMode = 'absolute' | 'vertical' | 'horizontal';
 export type Alignment = 'start' | 'center' | 'end';
+export type FillStyle = 'solid' | 'light' | 'transparent';
+export type FontSize = 12 | 16 | 24 | 36 | 48;
+export type FontWeight = 'normal' | 'bold';
+export type TextAlign = 'left' | 'center' | 'right';
+export type IconName = 'menu' | 'search' | 'user' | 'home' | 'settings';
 
 export interface WireframeElement {
   id: string;
@@ -44,6 +52,15 @@ export interface WireframeElement {
   gap?: number;
   padding?: number;
   align?: Alignment;
+  fontSize?: FontSize;
+  fontWeight?: FontWeight;
+  textAlign?: TextAlign;
+  borderRadius?: number;
+  strokeWidth?: number;
+  fill?: FillStyle;
+  iconName?: IconName;
+  rows?: number;
+  cols?: number;
 }
 
 export const ARTBOARD_PRESETS = [
@@ -97,18 +114,90 @@ function generateId(): string {
 }
 
 const defaultElementSize: Record<
-  Exclude<ElementType, 'artboard' | 'container'>,
-  Pick<WireframeElement, 'width' | 'height'> & Partial<Pick<WireframeElement, 'text' | 'checked'>>
+  Exclude<ElementType, 'artboard'>,
+  Pick<WireframeElement, 'width' | 'height'> &
+    Partial<
+      Pick<
+        WireframeElement,
+        | 'text'
+        | 'checked'
+        | 'fontSize'
+        | 'fontWeight'
+        | 'textAlign'
+        | 'borderRadius'
+        | 'strokeWidth'
+        | 'fill'
+        | 'iconName'
+        | 'rows'
+        | 'cols'
+      >
+    >
 > = {
-  box: { width: 240, height: 160 },
-  divider: { width: 240, height: 1 },
-  heading: { width: 320, height: 48, text: 'Heading' },
-  text: { width: 240, height: 28, text: 'Text' },
-  button: { width: 140, height: 40, text: 'Button' },
-  input: { width: 240, height: 40, text: 'Input' },
-  checkbox: { width: 180, height: 24, text: 'Checkbox', checked: false },
-  dropdown: { width: 240, height: 40, text: 'Dropdown' },
+  container: { width: 240, height: 160, borderRadius: 0, strokeWidth: 1, fill: 'transparent' },
+  box: { width: 240, height: 160, borderRadius: 0, strokeWidth: 1, fill: 'transparent' },
+  divider: { width: 240, height: 1, strokeWidth: 1 },
+  heading: {
+    width: 320,
+    height: 48,
+    text: 'Heading',
+    fontSize: 36,
+    fontWeight: 'bold',
+    textAlign: 'left',
+  },
+  text: {
+    width: 240,
+    height: 28,
+    text: 'Text',
+    fontSize: 16,
+    fontWeight: 'normal',
+    textAlign: 'left',
+  },
+  button: {
+    width: 140,
+    height: 40,
+    text: 'Button',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    borderRadius: 6,
+    strokeWidth: 1,
+    fill: 'solid',
+  },
+  input: {
+    width: 240,
+    height: 40,
+    text: 'Input',
+    fontSize: 16,
+    fontWeight: 'normal',
+    textAlign: 'left',
+    borderRadius: 4,
+    strokeWidth: 1,
+    fill: 'transparent',
+  },
+  checkbox: {
+    width: 180,
+    height: 24,
+    text: 'Checkbox',
+    checked: false,
+    fontSize: 16,
+    fontWeight: 'normal',
+    textAlign: 'left',
+  },
+  dropdown: {
+    width: 240,
+    height: 40,
+    text: 'Dropdown',
+    fontSize: 16,
+    fontWeight: 'normal',
+    textAlign: 'left',
+    borderRadius: 4,
+    strokeWidth: 1,
+    fill: 'transparent',
+  },
   'image-placeholder': { width: 240, height: 160 },
+  icon: { width: 32, height: 32, iconName: 'search' },
+  avatar: { width: 48, height: 48 },
+  table: { width: 320, height: 180, rows: 3, cols: 3 },
 };
 
 function getDefaultElementName(type: ElementType, index = 1) {
@@ -135,6 +224,12 @@ function getDefaultElementName(type: ElementType, index = 1) {
       return 'Dropdown';
     case 'image-placeholder':
       return 'Image';
+    case 'icon':
+      return 'Icon';
+    case 'avatar':
+      return 'Avatar';
+    case 'table':
+      return 'Table';
     default:
       return type;
   }
@@ -223,191 +318,8 @@ function isAutoLayoutContainer(element: WireframeElement | null | undefined) {
   );
 }
 
-function getLayoutChildPosition(
-  parent: WireframeElement,
-  siblings: WireframeElement[],
-  child: WireframeElement,
-  index: number
-) {
-  const layoutMode = parent.layoutMode ?? 'absolute';
-  if (layoutMode === 'absolute') {
-    return { x: child.x, y: child.y };
-  }
-
-  const gap = parent.gap ?? 0;
-  const padding = parent.padding ?? 0;
-  const align = parent.align ?? 'start';
-
-  if (layoutMode === 'vertical') {
-    const contentWidth = Math.max(0, parent.width - padding * 2);
-    const offsetY = siblings
-      .slice(0, index)
-      .reduce((sum, sibling, siblingIndex) => sum + sibling.height + (siblingIndex > 0 ? gap : 0), 0);
-    let x = padding;
-    if (align === 'center') {
-      x = padding + Math.max(0, (contentWidth - child.width) / 2);
-    } else if (align === 'end') {
-      x = padding + Math.max(0, contentWidth - child.width);
-    }
-
-    return { x, y: padding + offsetY };
-  }
-
-  const contentHeight = Math.max(0, parent.height - padding * 2);
-  const offsetX = siblings
-    .slice(0, index)
-    .reduce((sum, sibling, siblingIndex) => sum + sibling.width + (siblingIndex > 0 ? gap : 0), 0);
-  let y = padding;
-  if (align === 'center') {
-    y = padding + Math.max(0, (contentHeight - child.height) / 2);
-  } else if (align === 'end') {
-    y = padding + Math.max(0, contentHeight - child.height);
-  }
-
-  return { x: padding + offsetX, y };
-}
-
-function reflowLayoutContainer(elements: WireframeElement[], containerId: string) {
-  const lookup = buildElementLookup(elements);
-  const container = lookup.get(containerId);
-  if (!container) {
-    return elements;
-  }
-
-  if ((container.layoutMode ?? 'absolute') === 'absolute') {
-    return elements;
-  }
-
-  const children = getElementChildren(elements, containerId);
-  if (!children.length) {
-    return elements;
-  }
-
-  return elements.map((element) => {
-    const childIndex = children.findIndex((child) => child.id === element.id);
-    if (childIndex === -1) {
-      return element;
-    }
-
-    const child = children[childIndex];
-    const relative = getLayoutChildPosition(container, children, child, childIndex);
-    return {
-      ...element,
-      x: relative.x,
-      y: relative.y,
-    };
-  });
-}
-
-function reflowAffectedLayoutContainers(elements: WireframeElement[], changedIds: string[]) {
-  const lookup = buildElementLookup(elements);
-  const affected = new Set<string>();
-
-  for (const id of changedIds) {
-    if (!id) {
-      continue;
-    }
-
-    const element = lookup.get(id);
-    if (!element) {
-      continue;
-    }
-
-    if (isAutoLayoutContainer(element)) {
-      affected.add(element.id);
-    }
-
-    if (element.parentId) {
-      const parent = lookup.get(element.parentId);
-      if (isAutoLayoutContainer(parent)) {
-        affected.add(parent.id);
-      }
-    }
-  }
-
-  let nextElements = elements;
-  for (const containerId of affected) {
-    nextElements = reflowLayoutContainer(nextElements, containerId);
-  }
-
-  return nextElements;
-}
-
-function fitContainerToChildren(elements: WireframeElement[], containerId: string) {
-  const lookup = buildElementLookup(elements);
-  const container = lookup.get(containerId);
-  if (!container || container.type === 'artboard') {
-    return elements;
-  }
-
-  const children = getElementChildren(elements, containerId);
-  if (!children.length) {
-    return elements;
-  }
-
-  const childIds = children.map((child) => child.id);
-  const bounds = calculateBoundingBox(childIds, lookup);
-  if (!bounds) {
-    return elements;
-  }
-
-  return elements.map((element) => {
-    if (element.id === containerId) {
-      return {
-        ...element,
-        width: Math.max(element.width, bounds.x + bounds.width - getAbsolutePosition(element, lookup).x),
-        height: Math.max(element.height, bounds.y + bounds.height - getAbsolutePosition(element, lookup).y),
-      };
-    };
-
-    return element;
-  });
-}
-
-function normalizeContainers(elements: WireframeElement[], changedIds: string[]) {
-  let nextElements = reflowAffectedLayoutContainers(elements, changedIds);
-  const lookup = buildElementLookup(nextElements);
-  const affected = new Set<string>();
-
-  for (const id of changedIds) {
-    let current = lookup.get(id) ?? null;
-    while (current?.parentId) {
-      const parent = lookup.get(current.parentId) ?? null;
-      if (!parent) {
-        break;
-      }
-
-      if (
-        parent.type !== 'artboard' &&
-        (parent.layoutMode ?? 'absolute') === 'absolute' &&
-        (parent.type === 'container' || parent.type === 'box')
-      ) {
-        affected.add(parent.id);
-      }
-
-      current = parent;
-    }
-  }
-
-  const ordered = [...affected].sort((a, b) => {
-    const depthOf = (id: string) => {
-      let depth = 0;
-      let node = lookup.get(id) ?? null;
-      while (node?.parentId) {
-        depth += 1;
-        node = lookup.get(node.parentId) ?? null;
-      }
-      return depth;
-    };
-
-    return depthOf(b) - depthOf(a);
-  });
-
-  for (const containerId of ordered) {
-    nextElements = fitContainerToChildren(nextElements, containerId);
-  }
-
-  return nextElements;
+function normalizeContainers(elements: WireframeElement[], _changedIds: string[]) {
+  return elements;
 }
 
 function collectClipboard(elements: WireframeElement[], selectedIds: string[]) {
@@ -526,13 +438,8 @@ function buildPasteResult(
     }
   });
 
-  const reflowedElements =
-    targetParent && isAutoLayoutContainer(targetParent)
-      ? reflowAffectedLayoutContainers(nextElements, [targetParent.id])
-      : nextElements;
-
   return {
-    elements: reflowedElements,
+    elements: nextElements,
     selectedIds: pastedRootIds,
   };
 }
@@ -589,6 +496,19 @@ export const useStore = create<AppState>()(
               height: defaults.height,
               text: defaults.text,
               checked: defaults.checked,
+              layoutMode: defaults.layoutMode ?? 'absolute',
+              gap: defaults.gap ?? 0,
+              padding: defaults.padding ?? 0,
+              align: defaults.align ?? 'start',
+              fontSize: defaults.fontSize,
+              fontWeight: defaults.fontWeight,
+              textAlign: defaults.textAlign,
+              borderRadius: defaults.borderRadius,
+              strokeWidth: defaults.strokeWidth,
+              fill: defaults.fill,
+              iconName: defaults.iconName,
+              rows: defaults.rows,
+              cols: defaults.cols,
             };
 
             const nextElements = [...state.elements, newElement];

@@ -11,4 +11,10 @@ export interface ShapeProps {
 
 export interface GroupShapeProps extends ShapeProps {
   children?: ReactNode;
+  visualBounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 }

@@ -1,13 +1,29 @@
 import { Group, Rect, Text } from 'react-konva';
 import type { ShapeProps } from './types';
+import {
+  resolveFill,
+  resolveFontSize,
+  resolveFontStyle,
+  resolveKonvaAlign,
+  resolveReadableTextColor,
+  resolveStrokeWidth,
+} from './shared';
 
 export default function ButtonShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
+  const textColor = resolveReadableTextColor(element.fill);
+
   return (
     <Group
       id={element.id}
       x={element.x}
       y={element.y}
       draggable={draggable}
+      onDragStart={(e) => {
+        e.cancelBubble = true;
+      }}
+      onDragMove={(e) => {
+        e.cancelBubble = true;
+      }}
       onClick={(e) => {
         e.cancelBubble = true;
         onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
@@ -21,10 +37,10 @@ export default function ButtonShape({ element, isSelected, draggable = true, onD
       <Rect
         width={element.width}
         height={element.height}
-        fill="#ffffff"
+        fill={resolveFill(element.fill)}
         stroke={isSelected ? '#111111' : '#333333'}
-        strokeWidth={2}
-        cornerRadius={4}
+        strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
+        cornerRadius={element.borderRadius ?? 4}
         shadowEnabled={isSelected}
         shadowColor="#000000"
         shadowBlur={12}
@@ -34,10 +50,11 @@ export default function ButtonShape({ element, isSelected, draggable = true, onD
         width={element.width}
         height={element.height}
         text={element.text ?? 'Button'}
-        fontSize={14}
+        fontSize={resolveFontSize(element.fontSize, 16)}
+        fontStyle={resolveFontStyle(element.fontWeight)}
         fontFamily="Arial, sans-serif"
-        fill="#2f2f2f"
-        align="center"
+        fill={textColor}
+        align={resolveKonvaAlign(element.textAlign ?? 'center')}
         verticalAlign="middle"
       />
     </Group>

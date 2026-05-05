@@ -1,14 +1,36 @@
 import { Group, Line, Rect } from 'react-konva';
 import type { ShapeProps } from './types';
-import { resolveFill, resolveStrokeWidth } from './shared';
+import { resolveStrokeWidth } from './shared';
 
-export default function ImagePlaceholderShape({
+export default function TableShape({
   element,
-  isSelected,
   draggable = true,
   onDragEnd,
   onSelect,
 }: ShapeProps) {
+  const rows = Math.max(1, element.rows ?? 3);
+  const cols = Math.max(1, element.cols ?? 3);
+  const rowHeight = element.height / rows;
+  const colWidth = element.width / cols;
+
+  const verticalLines = Array.from({ length: cols - 1 }, (_, index) => (
+    <Line
+      key={`v-${index}`}
+      points={[(index + 1) * colWidth, 0, (index + 1) * colWidth, element.height]}
+      stroke="#9ca3af"
+      strokeWidth={1}
+    />
+  ));
+
+  const horizontalLines = Array.from({ length: rows - 1 }, (_, index) => (
+    <Line
+      key={`h-${index}`}
+      points={[0, (index + 1) * rowHeight, element.width, (index + 1) * rowHeight]}
+      stroke="#9ca3af"
+      strokeWidth={1}
+    />
+  ));
+
   return (
     <Group
       id={element.id}
@@ -34,25 +56,13 @@ export default function ImagePlaceholderShape({
       <Rect
         width={element.width}
         height={element.height}
-        fill={resolveFill(element.fill)}
-        stroke={isSelected ? '#111111' : '#333333'}
+        fill="#ffffff"
+        stroke="#333333"
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
         cornerRadius={element.borderRadius ?? 0}
-        shadowEnabled={isSelected}
-        shadowColor="#000000"
-        shadowBlur={12}
-        shadowOpacity={0.12}
       />
-      <Line
-        points={[0, 0, element.width, element.height]}
-        stroke="#a3a3a3"
-        strokeWidth={1}
-      />
-      <Line
-        points={[element.width, 0, 0, element.height]}
-        stroke="#a3a3a3"
-        strokeWidth={1}
-      />
+      {verticalLines}
+      {horizontalLines}
     </Group>
   );
 }

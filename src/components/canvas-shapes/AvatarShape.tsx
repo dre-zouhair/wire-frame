@@ -1,14 +1,15 @@
-import { Group, Line, Rect } from 'react-konva';
+import { Circle, Group, Text } from 'react-konva';
 import type { ShapeProps } from './types';
-import { resolveFill, resolveStrokeWidth } from './shared';
+import { resolveStrokeWidth } from './shared';
 
-export default function ImagePlaceholderShape({
+export default function AvatarShape({
   element,
-  isSelected,
   draggable = true,
   onDragEnd,
   onSelect,
 }: ShapeProps) {
+  const radius = Math.min(element.width, element.height) / 2;
+
   return (
     <Group
       id={element.id}
@@ -31,27 +32,26 @@ export default function ImagePlaceholderShape({
       }}
       onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
     >
-      <Rect
-        width={element.width}
-        height={element.height}
-        fill={resolveFill(element.fill)}
-        stroke={isSelected ? '#111111' : '#333333'}
+      <Circle
+        x={radius}
+        y={radius}
+        radius={radius}
+        fill="#f3f4f6"
+        stroke="#333333"
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
-        cornerRadius={element.borderRadius ?? 0}
-        shadowEnabled={isSelected}
-        shadowColor="#000000"
-        shadowBlur={12}
-        shadowOpacity={0.12}
       />
-      <Line
-        points={[0, 0, element.width, element.height]}
-        stroke="#a3a3a3"
-        strokeWidth={1}
-      />
-      <Line
-        points={[element.width, 0, 0, element.height]}
-        stroke="#a3a3a3"
-        strokeWidth={1}
+      <Text
+        x={0}
+        y={0}
+        width={radius * 2}
+        height={radius * 2}
+        text="U"
+        fontSize={Math.max(12, radius * 0.95)}
+        fontStyle="bold"
+        fill="#4b5563"
+        align="center"
+        verticalAlign="middle"
+        listening={false}
       />
     </Group>
   );

@@ -1,5 +1,6 @@
 import { Text } from 'react-konva';
 import type { ShapeProps } from './types';
+import { resolveFontSize, resolveFontStyle, resolveKonvaAlign } from './shared';
 
 export default function HeadingShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
   return (
@@ -10,12 +11,19 @@ export default function HeadingShape({ element, isSelected, draggable = true, on
       width={element.width}
       height={element.height}
       text={element.text ?? 'Heading'}
-      fontSize={28}
-      fontStyle="bold"
+      fontSize={resolveFontSize(element.fontSize, 36)}
+      fontStyle={resolveFontStyle(element.fontWeight ?? 'bold')}
       fontFamily="Arial, sans-serif"
       fill="#202020"
+      align={resolveKonvaAlign(element.textAlign ?? 'left')}
       verticalAlign="middle"
       draggable={draggable}
+      onDragStart={(e) => {
+        e.cancelBubble = true;
+      }}
+      onDragMove={(e) => {
+        e.cancelBubble = true;
+      }}
       onClick={(e) => {
         e.cancelBubble = true;
         onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
