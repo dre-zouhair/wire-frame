@@ -1,7 +1,7 @@
 import { Text } from 'react-konva';
 import type { ShapeProps } from './types';
 
-export default function TextShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
+export default function HeadingShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
   return (
     <Text
       id={element.id}
@@ -9,10 +9,11 @@ export default function TextShape({ element, isSelected, draggable = true, onDra
       y={element.y}
       width={element.width}
       height={element.height}
-      text={element.text ?? 'Text'}
-      fontSize={16}
+      text={element.text ?? 'Heading'}
+      fontSize={28}
+      fontStyle="bold"
       fontFamily="Arial, sans-serif"
-      fill="#2f2f2f"
+      fill="#202020"
       verticalAlign="middle"
       draggable={draggable}
       onClick={(e) => {

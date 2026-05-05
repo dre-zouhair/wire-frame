@@ -1,13 +1,7 @@
-import { Group, Line, Rect } from 'react-konva';
+import { Group, Rect, RegularPolygon, Text } from 'react-konva';
 import type { ShapeProps } from './types';
 
-export default function ImagePlaceholderShape({
-  element,
-  isSelected,
-  draggable = true,
-  onDragEnd,
-  onSelect,
-}: ShapeProps) {
+export default function DropdownShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
   return (
     <Group
       id={element.id}
@@ -28,22 +22,33 @@ export default function ImagePlaceholderShape({
         width={element.width}
         height={element.height}
         fill="#ffffff"
-        stroke={isSelected ? '#111111' : '#333333'}
-        strokeWidth={2}
+        stroke={isSelected ? '#111111' : '#8a8a8a'}
+        strokeWidth={1}
+        cornerRadius={3}
         shadowEnabled={isSelected}
         shadowColor="#000000"
         shadowBlur={12}
         shadowOpacity={0.12}
       />
-      <Line
-        points={[0, 0, element.width, element.height]}
-        stroke="#a3a3a3"
-        strokeWidth={1}
+      <Text
+        x={10}
+        y={0}
+        width={element.width - 28}
+        height={element.height}
+        text={element.text ?? 'Dropdown'}
+        fontSize={14}
+        fontFamily="Arial, sans-serif"
+        fill="#2f2f2f"
+        align="left"
+        verticalAlign="middle"
       />
-      <Line
-        points={[element.width, 0, 0, element.height]}
-        stroke="#a3a3a3"
-        strokeWidth={1}
+      <RegularPolygon
+        x={element.width - 14}
+        y={element.height / 2 - 1}
+        sides={3}
+        radius={5}
+        fill="#666666"
+        rotation={180}
       />
     </Group>
   );

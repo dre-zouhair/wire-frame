@@ -1,7 +1,9 @@
 import { Group, Rect, Text } from 'react-konva';
 import type { ShapeProps } from './types';
 
-export default function InputShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
+export default function CheckboxShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
+  const boxSize = 16;
+
   return (
     <Group
       id={element.id}
@@ -19,26 +21,26 @@ export default function InputShape({ element, isSelected, draggable = true, onDr
       onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
     >
       <Rect
-        width={element.width}
-        height={element.height}
+        x={0}
+        y={4}
+        width={boxSize}
+        height={boxSize}
         fill="#ffffff"
-        stroke={isSelected ? '#111111' : '#7a7a7a'}
+        stroke={isSelected ? '#111111' : '#555555'}
         strokeWidth={1}
-        cornerRadius={3}
-        shadowEnabled={isSelected}
-        shadowColor="#000000"
-        shadowBlur={12}
-        shadowOpacity={0.12}
       />
+      {element.checked ? (
+        <Rect x={4} y={8} width={8} height={8} fill="#111111" />
+      ) : null}
       <Text
-        x={10}
+        x={24}
         y={0}
-        width={element.width - 20}
+        width={Math.max(0, element.width - 24)}
         height={element.height}
-        text={element.text ?? 'Input'}
+        text={element.text ?? 'Checkbox'}
         fontSize={14}
         fontFamily="Arial, sans-serif"
-        fill="#7a7a7a"
+        fill="#2f2f2f"
         align="left"
         verticalAlign="middle"
       />

@@ -1,43 +1,42 @@
 import { Group, Rect, Text } from 'react-konva';
-import type { WireframeElement } from '@/store/useStore';
+import type { ShapeProps } from './types';
 
-interface ButtonShapeProps {
-  element: WireframeElement;
-  isSelected: boolean;
-  onDragEnd: (id: string, x: number, y: number) => void;
-  onClick: (id: string) => void;
-}
-
-export default function ButtonShape({ element, isSelected, onDragEnd, onClick }: ButtonShapeProps) {
+export default function ButtonShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
   return (
     <Group
       id={element.id}
       x={element.x}
       y={element.y}
-      draggable
+      draggable={draggable}
+      onClick={(e) => {
+        e.cancelBubble = true;
+        onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
+      }}
+      onTap={(e) => {
+        e.cancelBubble = true;
+        onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
+      }}
       onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
-      onClick={() => onClick(element.id)}
-      onTap={() => onClick(element.id)}
     >
       <Rect
         width={element.width}
         height={element.height}
-        fill="white"
-        stroke="#333333"
+        fill="#ffffff"
+        stroke={isSelected ? '#111111' : '#333333'}
         strokeWidth={2}
         cornerRadius={4}
         shadowEnabled={isSelected}
         shadowColor="#000000"
-        shadowBlur={8}
-        shadowOpacity={0.15}
+        shadowBlur={12}
+        shadowOpacity={0.12}
       />
       <Text
         width={element.width}
         height={element.height}
-        text={element.text || 'Button'}
+        text={element.text ?? 'Button'}
         fontSize={14}
-        fontFamily="sans-serif"
-        fill="#333333"
+        fontFamily="Arial, sans-serif"
+        fill="#2f2f2f"
         align="center"
         verticalAlign="middle"
       />

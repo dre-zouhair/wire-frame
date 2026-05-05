@@ -1,7 +1,7 @@
 import { Group, Rect } from 'react-konva';
 import type { GroupShapeProps } from './types';
 
-export default function BoxShape({
+export default function ContainerShape({
   element,
   isSelected,
   draggable = true,
@@ -20,9 +20,10 @@ export default function BoxShape({
       <Rect
         width={element.width}
         height={element.height}
-        fill="#ffffff"
-        stroke={isSelected ? '#111111' : '#333333'}
-        strokeWidth={2}
+        fill="rgba(255,255,255,0.01)"
+        stroke={isSelected ? '#111111' : '#9ca3af'}
+        strokeWidth={1}
+        dash={[6, 4]}
         onClick={(e) => {
           e.cancelBubble = true;
           onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
@@ -31,10 +32,6 @@ export default function BoxShape({
           e.cancelBubble = true;
           onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
         }}
-        shadowEnabled={isSelected}
-        shadowColor="#000000"
-        shadowBlur={12}
-        shadowOpacity={0.12}
       />
       {children}
     </Group>

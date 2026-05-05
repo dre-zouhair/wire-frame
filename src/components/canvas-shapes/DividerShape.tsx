@@ -1,19 +1,17 @@
-import { Text } from 'react-konva';
+import { Line } from 'react-konva';
 import type { ShapeProps } from './types';
 
-export default function TextShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
+export default function DividerShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
+  const horizontal = element.width >= element.height;
+
   return (
-    <Text
+    <Line
       id={element.id}
       x={element.x}
       y={element.y}
-      width={element.width}
-      height={element.height}
-      text={element.text ?? 'Text'}
-      fontSize={16}
-      fontFamily="Arial, sans-serif"
-      fill="#2f2f2f"
-      verticalAlign="middle"
+      points={horizontal ? [0, element.height / 2, element.width, element.height / 2] : [element.width / 2, 0, element.width / 2, element.height]}
+      stroke={isSelected ? '#111111' : '#d4d4d4'}
+      strokeWidth={1}
       draggable={draggable}
       onClick={(e) => {
         e.cancelBubble = true;
@@ -24,10 +22,7 @@ export default function TextShape({ element, isSelected, draggable = true, onDra
         onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
       }}
       onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
-      shadowEnabled={isSelected}
-      shadowColor="#000000"
-      shadowBlur={10}
-      shadowOpacity={0.12}
+      hitStrokeWidth={12}
     />
   );
 }

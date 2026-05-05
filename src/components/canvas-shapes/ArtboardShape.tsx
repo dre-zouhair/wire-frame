@@ -1,14 +1,18 @@
-import { Group, Rect } from 'react-konva';
+import { Group, Rect, Text } from 'react-konva';
 import type { GroupShapeProps } from './types';
 
-export default function BoxShape({
+interface ArtboardShapeProps extends GroupShapeProps {
+  onBackgroundMouseDown?: (event: any) => void;
+}
+
+export default function ArtboardShape({
   element,
   isSelected,
   draggable = true,
   onDragEnd,
   onSelect,
   children,
-}: GroupShapeProps) {
+}: ArtboardShapeProps) {
   return (
     <Group
       id={element.id}
@@ -16,13 +20,20 @@ export default function BoxShape({
       y={element.y}
       draggable={draggable}
       onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
+      clipX={0}
+      clipY={0}
+      clipWidth={element.width}
+      clipHeight={element.height}
     >
       <Rect
         width={element.width}
         height={element.height}
         fill="#ffffff"
-        stroke={isSelected ? '#111111' : '#333333'}
-        strokeWidth={2}
+        stroke={isSelected ? '#111111' : '#2f2f2f'}
+        strokeWidth={1}
+        shadowColor="#000000"
+        shadowBlur={22}
+        shadowOpacity={0.22}
         onClick={(e) => {
           e.cancelBubble = true;
           onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
@@ -31,10 +42,15 @@ export default function BoxShape({
           e.cancelBubble = true;
           onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
         }}
-        shadowEnabled={isSelected}
-        shadowColor="#000000"
-        shadowBlur={12}
-        shadowOpacity={0.12}
+      />
+      <Text
+        x={14}
+        y={12}
+        text={element.name ?? 'Page'}
+        fontSize={12}
+        fontStyle="bold"
+        fill="#6b7280"
+        listening={false}
       />
       {children}
     </Group>

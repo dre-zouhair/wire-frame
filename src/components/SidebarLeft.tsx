@@ -1,34 +1,179 @@
+import {
+  Box,
+  CheckSquare,
+  ChevronDown,
+  Heading1,
+  Image,
+  LayoutGrid,
+  Minus,
+  MousePointerClick,
+  Type,
+} from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useStore, type ElementType } from '@/store/useStore';
-import { Square, Type, MousePointerClick, Image, TextCursorInput } from 'lucide-react';
+import { getElementChildren } from '@/utils/geometry';
 
-const componentItems: { type: ElementType; label: string; icon: React.ReactNode }[] = [
-  { type: 'box', label: 'Box', icon: <Square className="w-4 h-4" /> },
-  { type: 'text', label: 'Text', icon: <Type className="w-4 h-4" /> },
-  { type: 'button', label: 'Button', icon: <MousePointerClick className="w-4 h-4" /> },
-  { type: 'image-placeholder', label: 'Image', icon: <Image className="w-4 h-4" /> },
-  { type: 'input', label: 'Input', icon: <TextCursorInput className="w-4 h-4" /> },
+const componentItems: Array<{ type: ElementType; label: string; icon: ReactNode }> = [
+  { type: 'container', label: 'Container', icon: <LayoutGrid className="h-4 w-4" /> },
+  { type: 'box', label: 'Box', icon: <Box className="h-4 w-4" /> },
+  { type: 'divider', label: 'Divider', icon: <Minus className="h-4 w-4" /> },
+  { type: 'heading', label: 'Heading', icon: <Heading1 className="h-4 w-4" /> },
+  { type: 'text', label: 'Text', icon: <Type className="h-4 w-4" /> },
+  { type: 'button', label: 'Button', icon: <MousePointerClick className="h-4 w-4" /> },
+  { type: 'input', label: 'Input', icon: <Type className="h-4 w-4" /> },
+  { type: 'checkbox', label: 'Checkbox', icon: <CheckSquare className="h-4 w-4" /> },
+  { type: 'dropdown', label: 'Dropdown', icon: <ChevronDown className="h-4 w-4" /> },
+  { type: 'image-placeholder', label: 'Image', icon: <Image className="h-4 w-4" /> },
 ];
 
+function getLayerLabel(type: ElementType, name?: string, text?: string) {
+  switch (type) {
+    case 'artboard':
+      return name ?? 'Artboard';
+    case 'container':
+      return name ?? 'Container';
+    case 'divider':
+      return name ?? 'Divider';
+    case 'heading':
+      return name ?? text ?? 'Heading';
+    case 'text':
+      return name ?? text ?? 'Text';
+    case 'button':
+      return name ?? text ?? 'Button';
+    case 'input':
+      return name ?? text ?? 'Input';
+    case 'checkbox':
+      return name ?? text ?? 'Checkbox';
+    case 'dropdown':
+      return name ?? text ?? 'Dropdown';
+    case 'image-placeholder':
+      return name ?? 'Image';
+    default:
+      return name ?? type;
+  }
+}
+
 export default function SidebarLeft() {
+  const elements = useStore((state) => state.elements);
   const addElement = useStore((state) => state.addElement);
+  const selectedIds = useStore((state) => state.selectedIds);
+  const activeArtboardId = useStore((state) => state.activeArtboardId);
+  const setActivePage = useStore((state) => state.setActivePage);
+  const selectElement = useStore((state) => state.selectElement);
+
+  const rootPages = elements.filter((element) => element.type === 'artboard');
+
+  const renderTree = (parentId: string | null, depth = 0): ReactNode => {
+    const nodes =
+      parentId === null
+        ? rootPages
+        : getElementChildren(elements, parentId);
+
+    return nodes.map((element) => {
+      const children = getElementChildren(elements, element.id);
+      const isActive = element.id === selectedIds[selectedIds.length - 1];
+      const isPartOfSelection = selectedIds.includes(element.id);
+      const isActivePage = element.id === activeArtboardId;
+      const canToggleSelection = element.type !== 'artboard';
+
+      return (
+        <div key={element.id} className={depth > 0 ? 'ml-3 border-l border-zinc-200 pl-3' : ''}>
+          <div className="relative py-0.5">
+            {depth > 0 ? (
+              <span className="absolute -left-3 top-5 h-px w-3 bg-zinc-200" />
+            ) : null}
+            <div
+              className={[
+                'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors',
+                element.type === 'artboard' && isActivePage
+                  ? 'bg-zinc-900 text-white'
+                  : isActive
+                    ? 'bg-zinc-900 text-white'
+                    : isPartOfSelection
+                      ? 'bg-zinc-100 text-zinc-900'
+                      : 'text-zinc-700 hover:bg-zinc-100',
+              ].join(' ')}
+              style={{ paddingLeft: 12 + Math.max(0, depth - 1) * 16 }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  if (element.type === 'artboard') {
+                    setActivePage(element.id);
+                    return;
+                  }
+
+                  selectElement(element.id, false);
+                }}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                {canToggleSelection ? (
+                  <input
+                    type="checkbox"
+                    checked={isPartOfSelection}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onChange={(event) => {
+                      event.stopPropagation();
+                      selectElement(element.id, true);
+                    }}
+                    className="h-3.5 w-3.5 rounded border-zinc-300 text-zinc-900"
+                  />
+                ) : null}
+                <span className="truncate">
+                  {element.type === 'artboard'
+                    ? element.name ?? `Page ${rootPages.findIndex((page) => page.id === element.id) + 1}`
+                    : getLayerLabel(element.type, element.name, element.text)}
+                </span>
+              </button>
+              <span className="ml-2 shrink-0 text-[10px] uppercase tracking-[0.18em] text-zinc-400">
+                {element.type}
+              </span>
+            </div>
+          </div>
+          {children.length > 0 ? renderTree(element.id, depth + 1) : null}
+        </div>
+      );
+    });
+  };
 
   return (
-    <div className="w-64 h-full border-r border-gray-200 bg-white flex flex-col">
-      <div className="px-4 py-3 border-b border-gray-200">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Components</h2>
-      </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {componentItems.map((item) => (
-          <button
-            key={item.type}
-            onClick={() => addElement(item.type)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors"
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </div>
-    </div>
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-zinc-200 bg-white">
+      <section className="flex min-h-0 flex-1 flex-col border-b border-zinc-200">
+        <div className="border-b border-zinc-200 px-4 py-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            Components
+          </h2>
+        </div>
+        <div className="grid flex-1 auto-rows-min grid-cols-2 gap-2 overflow-y-auto p-3">
+          {componentItems.map((item) => (
+            <button
+              key={item.type}
+              type="button"
+              onClick={() => addElement(item.type)}
+              className="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-left text-sm text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+            >
+              {item.icon}
+              <span className="truncate">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="flex min-h-0 flex-1 flex-col">
+        <div className="border-b border-zinc-200 px-4 py-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            Pages & Layers
+          </h2>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {rootPages.length > 0 ? renderTree(null) : null}
+        </div>
+      </section>
+    </aside>
   );
 }

@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { useStore } from '@/store/useStore';
+import { useEffect, useRef, useState } from 'react';
+import type { RefObject } from 'react';
+import type Konva from 'konva';
 import SidebarLeft from '@/components/SidebarLeft';
 import SidebarRight from '@/components/SidebarRight';
+import TopBar from '@/components/TopBar';
 import CanvasArea from '@/components/CanvasArea';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
-function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
+function useContainerSize(ref: RefObject<HTMLDivElement | null>) {
   const [size, setSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
@@ -28,37 +31,21 @@ function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
 }
 
 export default function App() {
-  const deleteSelected = useStore((state) => state.deleteSelected);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<Konva.Stage>(null);
   const canvasSize = useContainerSize(canvasContainerRef);
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        const target = e.target as HTMLElement;
-        const tagName = target.tagName.toLowerCase();
-        const isInput = tagName === 'input' || tagName === 'textarea' || target.isContentEditable;
-        if (!isInput) {
-          e.preventDefault();
-          deleteSelected();
-        }
-      }
-    },
-    [deleteSelected]
-  );
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
+  useKeyboardShortcuts();
 
   return (
-    <div className="w-screen h-screen flex overflow-hidden bg-gray-50">
-      <SidebarLeft />
-      <div ref={canvasContainerRef} className="flex-1 relative">
-        <CanvasArea width={canvasSize.width} height={canvasSize.height} />
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-zinc-100">
+      <TopBar stageRef={stageRef} />
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <SidebarLeft />
+        <main ref={canvasContainerRef} className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+          <CanvasArea stageRef={stageRef} width={canvasSize.width} height={canvasSize.height} />
+        </main>
+        <SidebarRight />
       </div>
-      <SidebarRight />
     </div>
   );
 }

@@ -58,6 +58,7 @@
     "tailwind-merge": "^3.4.0",
     "vaul": "^1.1.2",
     "zod": "^4.3.5",
+    "zundo": "^2.0.0",
     "zustand": "^5.0.13"
   },
   "devDependencies": {
