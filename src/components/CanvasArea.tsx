@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType, ReactNode, RefObject } from 'react';
-import { Group, Layer, Rect, Stage, Transformer } from 'react-konva';
+import { Group, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva';
 import type Konva from 'konva';
 import { useStore, type ElementType, type WireframeElement } from '@/store/useStore';
 import BoxShape from './canvas-shapes/BoxShape';
@@ -34,6 +34,9 @@ import {
   getDirectLayoutChildren,
   isAutoLayoutContainer,
 } from '@/utils/layoutMath';
+import { resolveInheritedElement } from '@/utils/inheritance';
+import { applyDesignTokens } from '@/utils/design-tokens';
+import { isSemanticContainerType } from '@/utils/semantic-html';
 
 interface CanvasAreaProps {
   width: number;
@@ -44,6 +47,16 @@ interface CanvasAreaProps {
 const leafShapes: Partial<Record<Exclude<ElementType, 'artboard' | 'container'>, ComponentType<any>>> =
   {
     box: BoxShape,
+    div: ContainerShape,
+    section: ContainerShape,
+    header: ContainerShape,
+    main: ContainerShape,
+    footer: ContainerShape,
+    nav: ContainerShape,
+    aside: ContainerShape,
+    article: ContainerShape,
+    ul: ContainerShape,
+    li: BoxShape,
     divider: DividerShape,
     heading: HeadingShape,
     text: TextShape,
@@ -56,6 +69,7 @@ const leafShapes: Partial<Record<Exclude<ElementType, 'artboard' | 'container'>,
     dropdown: DropdownShape,
     label: LabelShape,
     'image-placeholder': ImagePlaceholderShape,
+    img: ImagePlaceholderShape,
     icon: IconShape,
     avatar: AvatarShape,
     table: TableShape,
@@ -64,6 +78,16 @@ const leafShapes: Partial<Record<Exclude<ElementType, 'artboard' | 'container'>,
 const transformableTypes = new Set<ElementType>([
   'container',
   'box',
+  'div',
+  'section',
+  'header',
+  'main',
+  'footer',
+  'nav',
+  'aside',
+  'article',
+  'ul',
+  'li',
   'divider',
   'heading',
   'text',
@@ -76,12 +100,27 @@ const transformableTypes = new Set<ElementType>([
   'dropdown',
   'label',
   'image-placeholder',
+  'img',
   'icon',
   'avatar',
   'table',
 ]);
 
-const pasteTargetTypes = new Set<ElementType>(['artboard', 'container', 'box']);
+const pasteTargetTypes = new Set<ElementType>([
+  'artboard',
+  'container',
+  'box',
+  'div',
+  'section',
+  'header',
+  'main',
+  'footer',
+  'nav',
+  'aside',
+  'article',
+  'ul',
+  'li',
+]);
 
 interface Point {
   x: number;
@@ -91,6 +130,45 @@ interface Point {
 interface SelectionRect extends Point {
   width: number;
   height: number;
+}
+
+interface GuideLine {
+  orientation: 'vertical' | 'horizontal';
+  position: number;
+  label?: string;
+  distance?: number;
+}
+
+type SnapCandidate = {
+  delta: number;
+  position: number;
+  label?: string;
+};
+
+interface InlineEditorState {
+  id: string;
+  field: 'text' | 'value' | 'placeholder';
+  value: string;
+}
+
+const SNAP_THRESHOLD = 8;
+const TEXT_TYPES = new Set<ElementType>([
+  'heading',
+  'text',
+  'button',
+  'input',
+  'textarea',
+  'dropdown',
+  'label',
+]);
+
+function isTextLikeElement(element: WireframeElement | null | undefined) {
+  return Boolean(element && TEXT_TYPES.has(element.type));
+}
+
+function getBaselineOffset(element: WireframeElement) {
+  const fontSize = element.fontSize ?? 16;
+  return Math.max(10, Math.round(fontSize * 0.78));
 }
 
 function toWorldPoint(pointer: Point, stagePos: Point, scale: number): Point {
@@ -154,7 +232,12 @@ function buildVisibleRectMap(elements: WireframeElement[]) {
     }
 
     const ownBounds = rawRects.get(element.id);
-    if (!ownBounds || (element.type !== 'container' && element.type !== 'box')) {
+    if (
+      !ownBounds ||
+      (element.type !== 'container' &&
+        element.type !== 'box' &&
+        !isSemanticContainerType(element.type))
+    ) {
       const fallback = ownBounds ?? { x: 0, y: 0, width: element.width, height: element.height };
       visualBoundsCache.set(element.id, fallback);
       return fallback;
@@ -195,7 +278,9 @@ function buildVisibleRectMap(elements: WireframeElement[]) {
     computeVisualBounds(element);
   }
 
-  for (const element of elements.filter((item) => item.type === 'container' || item.type === 'box')) {
+  for (const element of elements.filter((item) => {
+    return item.type === 'container' || item.type === 'box' || isSemanticContainerType(item.type);
+  })) {
     const bounds = computeVisualBounds(element);
     renderedRects.set(element.id, bounds);
   }
@@ -244,9 +329,11 @@ function getVisualBoundsForContainer(
 
 export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps) {
   const elements = useStore((state) => state.elements);
+  const designTokens = useStore((state) => state.designTokens);
   const selectedIds = useStore((state) => state.selectedIds);
   const activeArtboardId = useStore((state) => state.activeArtboardId);
   const pageDragEnabled = useStore((state) => state.pageDragEnabled);
+  const fitToPageRevision = useStore((state) => state.fitToPageRevision);
   const setSelection = useStore((state) => state.setSelection);
   const setActivePage = useStore((state) => state.setActivePage);
   const selectElement = useStore((state) => state.selectElement);
@@ -264,6 +351,8 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState<Point | null>(null);
   const [selectionCurrent, setSelectionCurrent] = useState<Point | null>(null);
+  const [snapGuides, setSnapGuides] = useState<GuideLine[]>([]);
+  const [inlineEditor, setInlineEditor] = useState<InlineEditorState | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     clientX: number;
     clientY: number;
@@ -312,6 +401,24 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
   }, [activeArtboardId, height, width]);
 
   useEffect(() => {
+    if (!activeArtboard || width <= 0 || height <= 0) {
+      return;
+    }
+
+    const fitScale = Math.min(
+      (width - 80) / Math.max(activeArtboard.width, 1),
+      (height - 80) / Math.max(activeArtboard.height, 1),
+      1
+    );
+
+    setStageScale(fitScale);
+    setStagePos({
+      x: width / 2 - (activeArtboard.x + activeArtboard.width / 2) * fitScale,
+      y: height / 2 - (activeArtboard.y + activeArtboard.height / 2) * fitScale,
+    });
+  }, [fitToPageRevision, activeArtboard, width, height]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === ' ' && !event.repeat) {
         const target = event.target as HTMLElement | null;
@@ -330,6 +437,7 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
         setIsSpacePressed(false);
         setIsPanning(false);
         setPanStart(null);
+        setSnapGuides([]);
       }
     };
 
@@ -337,6 +445,7 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
       setIsSpacePressed(false);
       setIsPanning(false);
       setPanStart(null);
+      setSnapGuides([]);
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -493,6 +602,174 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
     selectElement(id, additive);
   };
 
+  const commitInlineEdit = () => {
+    if (!inlineEditor) {
+      return;
+    }
+
+    const element = elementById.get(inlineEditor.id);
+    if (!element) {
+      setInlineEditor(null);
+      return;
+    }
+
+    if (element.type === 'input' || element.type === 'textarea') {
+      if (inlineEditor.field === 'value') {
+        useStore.getState().updateElement(element.id, { value: inlineEditor.value });
+      } else {
+        useStore.getState().updateElement(element.id, {
+          placeholder: inlineEditor.value,
+          text: inlineEditor.value,
+        });
+      }
+    } else {
+      useStore.getState().updateElement(element.id, { text: inlineEditor.value });
+    }
+
+    setInlineEditor(null);
+  };
+
+  const startInlineEdit = (id: string) => {
+    const element = elementById.get(id);
+    if (!element) {
+      return;
+    }
+
+    const field =
+      element.type === 'input' || element.type === 'textarea'
+        ? (element.value ? 'value' : 'placeholder')
+        : 'text';
+    const value =
+      field === 'value'
+        ? element.value ?? ''
+        : field === 'placeholder'
+          ? element.placeholder ?? element.text ?? ''
+          : element.text ?? element.name ?? '';
+
+    setInlineEditor({ id, field, value });
+  };
+
+  const handleDragMove = (id: string, x: number, y: number, target?: any) => {
+    const element = elementById.get(id);
+    if (!element || element.type === 'artboard') {
+      return;
+    }
+
+    const parent = element.parentId ? elementById.get(element.parentId) ?? null : null;
+    const parentAbsolute = parent ? getAbsolutePosition(parent, elementById) : { x: 0, y: 0 };
+    let absX = parentAbsolute.x + x;
+    let absY = parentAbsolute.y + y;
+    const movingRect = {
+      x: absX,
+      y: absY,
+      width: element.width,
+      height: element.height,
+    };
+    const movingBaseline = absY + getBaselineOffset(element);
+    const movingTextLike = isTextLikeElement(element);
+    const candidates: GuideLine[] = [];
+    const movingDescendants = new Set(getDescendants(elements, id).map((item) => item.id));
+    let bestVertical: SnapCandidate | null = null;
+    let bestHorizontal: SnapCandidate | null = null;
+
+    const considerCandidate = (
+      orientation: 'vertical' | 'horizontal',
+      targetPosition: number,
+      movingPosition: number,
+      label?: string
+    ) => {
+      const delta = targetPosition - movingPosition;
+      if (Math.abs(delta) > SNAP_THRESHOLD) {
+        return;
+      }
+
+      const candidate = {
+        delta,
+        position: targetPosition,
+        label: `${Math.abs(Math.round(delta))} px${label ? ` • ${label}` : ''}`,
+      };
+      if (orientation === 'vertical') {
+        if (!bestVertical || Math.abs(delta) < Math.abs(bestVertical.delta)) {
+          bestVertical = candidate;
+        }
+      } else if (!bestHorizontal || Math.abs(delta) < Math.abs(bestHorizontal.delta)) {
+        bestHorizontal = candidate;
+      }
+    };
+
+    for (const [candidateId, rect] of renderedRects.entries()) {
+      if (candidateId === id || movingDescendants.has(candidateId)) {
+        continue;
+      }
+
+      const candidate = elementById.get(candidateId);
+      if (!candidate) {
+        continue;
+      }
+
+      const padding = candidate.padding ?? 0;
+      const edgesX = [rect.x, rect.x + rect.width / 2, rect.x + rect.width];
+      const edgesY = [rect.y, rect.y + rect.height / 2, rect.y + rect.height];
+
+      if (padding > 0) {
+        edgesX.push(rect.x + padding, rect.x + rect.width - padding);
+        edgesY.push(rect.y + padding, rect.y + rect.height - padding);
+      }
+
+      const movingEdgesX = [movingRect.x, movingRect.x + movingRect.width / 2, movingRect.x + movingRect.width];
+      const movingEdgesY = [movingRect.y, movingRect.y + movingRect.height / 2, movingRect.y + movingRect.height];
+
+      for (const targetX of edgesX) {
+        for (const movingX of movingEdgesX) {
+          considerCandidate('vertical', targetX, movingX);
+        }
+      }
+
+      for (const targetY of edgesY) {
+        for (const movingY of movingEdgesY) {
+          considerCandidate('horizontal', targetY, movingY);
+        }
+      }
+
+      if (movingTextLike && isTextLikeElement(candidate)) {
+        const targetBaseline = rect.y + getBaselineOffset(candidate);
+        considerCandidate('horizontal', targetBaseline, movingBaseline, 'baseline');
+      }
+    }
+
+    if (bestVertical !== null) {
+      const verticalGuide = bestVertical as SnapCandidate;
+      absX += verticalGuide.delta;
+      movingRect.x = absX;
+      candidates.push({
+        orientation: 'vertical',
+        position: verticalGuide.position,
+        label: verticalGuide.label,
+        distance: Math.abs(verticalGuide.delta),
+      });
+    }
+
+    if (bestHorizontal !== null) {
+      const horizontalGuide = bestHorizontal as SnapCandidate;
+      absY += horizontalGuide.delta;
+      movingRect.y = absY;
+      candidates.push({
+        orientation: 'horizontal',
+        position: horizontalGuide.position,
+        label: horizontalGuide.label ?? (movingTextLike ? 'baseline' : undefined),
+        distance: Math.abs(horizontalGuide.delta),
+      });
+    }
+
+    const nextX = absX - parentAbsolute.x;
+    const nextY = absY - parentAbsolute.y;
+    if (target?.position) {
+      target.position({ x: nextX, y: nextY });
+    }
+
+    setSnapGuides(candidates);
+  };
+
   const handleBackgroundMouseDown = (event: Konva.KonvaEventObject<MouseEvent>) => {
     if (event.evt.button !== 0) {
       return;
@@ -557,6 +834,7 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
   };
 
   const handleDragEnd = (id: string, x: number, y: number) => {
+    setSnapGuides([]);
     const element = elementById.get(id);
     if (!element) {
       return;
@@ -623,6 +901,10 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
     const interactive = options.interactive !== false;
     const keyPrefix = options.keyPrefix ? `${options.keyPrefix}__` : '';
     const isSelected = selectedIds.includes(sourceElement.id);
+    const resolvedElement = applyDesignTokens(
+      resolveInheritedElement(sourceElement, elements, elementById),
+      designTokens
+    );
     const parentChildren = parent ? getElementChildren(elements, parent.id) : [];
     const parentLayoutPositions =
       parent && isAutoLayoutContainer(parent) ? calculateAutoLayout(parent, parentChildren) : null;
@@ -631,34 +913,34 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
       y: sourceElement.y,
     };
 
-    if (sourceElement.type === 'instance') {
+    if (resolvedElement.type === 'instance') {
       const master =
-        sourceElement.masterComponentId
-          ? elementById.get(sourceElement.masterComponentId) ?? null
+        resolvedElement.masterComponentId
+          ? elementById.get(resolvedElement.masterComponentId) ?? null
           : null;
 
       return (
         <Group
-          key={`${keyPrefix}${sourceElement.id}`}
-          id={`${keyPrefix}${sourceElement.id}`}
+          key={`${keyPrefix}${resolvedElement.id}`}
+          id={`${keyPrefix}${resolvedElement.id}`}
           x={displayPosition.x}
           y={displayPosition.y}
           listening
           draggable={false}
           onClick={(e) => {
             e.cancelBubble = true;
-            handleSelect(sourceElement.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
+            handleSelect(resolvedElement.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
           }}
           onTap={(e) => {
             e.cancelBubble = true;
-            handleSelect(sourceElement.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
+            handleSelect(resolvedElement.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
           }}
         >
           <Rect
             x={0}
             y={0}
-            width={sourceElement.width}
-            height={sourceElement.height}
+            width={resolvedElement.width}
+            height={resolvedElement.height}
             fill="rgba(255,255,255,0.001)"
             stroke={isSelected ? '#111111' : '#a855f7'}
             strokeWidth={1}
@@ -667,7 +949,7 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
           {master && !options.visitedMasters?.has(master.id)
             ? renderNode(master, null, {
                 interactive: false,
-                keyPrefix: `${keyPrefix}${sourceElement.id}`,
+                keyPrefix: `${keyPrefix}${resolvedElement.id}`,
                 visitedMasters: new Set([...(options.visitedMasters ?? []), master.id]),
                 forcePosition: { x: 0, y: 0 },
               })
@@ -678,7 +960,7 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
 
     const children = getElementChildren(elements, sourceElement.id);
     const displayElement = {
-      ...sourceElement,
+      ...resolvedElement,
       id: `${keyPrefix}${sourceElement.id}`,
       x: displayPosition.x,
       y: displayPosition.y,
@@ -698,6 +980,7 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
           draggable={draggable && pageDragEnabled}
           interactive={interactive}
           onDragEnd={handleDragEnd}
+          onDragMove={handleDragMove}
           onSelect={handleSelect}
         >
           {children.map((child) => renderNode(child, sourceElement, childOptions))}
@@ -705,7 +988,10 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
       );
     }
 
-    if (sourceElement.type === 'container') {
+    if (
+      sourceElement.type === 'container' ||
+      (isSemanticContainerType(sourceElement.type) && sourceElement.type !== 'li')
+    ) {
       const childOptions: RenderOptions = {
         ...options,
         forcePosition: undefined,
@@ -718,6 +1004,7 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
           draggable={draggable}
           interactive={interactive}
           onDragEnd={handleDragEnd}
+          onDragMove={handleDragMove}
           onSelect={handleSelect}
           visualBounds={getVisualBoundsForContainer(sourceElement, elements, renderedRects)}
         >
@@ -726,7 +1013,7 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
       );
     }
 
-    if (sourceElement.type === 'box') {
+    if (sourceElement.type === 'box' || sourceElement.type === 'li') {
       const childOptions: RenderOptions = {
         ...options,
         forcePosition: undefined,
@@ -739,6 +1026,7 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
           draggable={draggable}
           interactive={interactive}
           onDragEnd={handleDragEnd}
+          onDragMove={handleDragMove}
           onSelect={handleSelect}
           visualBounds={getVisualBoundsForContainer(sourceElement, elements, renderedRects)}
         >
@@ -760,7 +1048,9 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
         draggable={draggable}
         interactive={interactive}
         onDragEnd={handleDragEnd}
+        onDragMove={handleDragMove}
         onSelect={handleSelect}
+        onEditStart={startInlineEdit}
       />
     );
   };
@@ -770,12 +1060,20 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
       ? buildSelectionRect(selectionStart, selectionCurrent)
       : null;
 
+  const selectedElement = selectedIds[0] ? elementById.get(selectedIds[0]) ?? null : null;
+  const editingElement = inlineEditor ? elementById.get(inlineEditor.id) ?? null : null;
+  const editingAbsolute = editingElement ? getAbsolutePosition(editingElement, elementById) : null;
   const canGroup = selectedIds.filter((id) => {
     const element = elementById.get(id);
     return Boolean(element && element.type !== 'artboard');
-  }).length >= 2;
-  const selectedElement = selectedIds[0] ? elementById.get(selectedIds[0]) ?? null : null;
-  const canUngroup = selectedElement?.type === 'container' && selectedIds.length === 1;
+  }).length >= 2 &&
+    (!selectedElement || selectedElement.parentId == null || elementById.get(selectedElement.parentId)?.type !== 'ul');
+  const canUngroup =
+    (selectedElement?.type === 'container' ||
+      selectedElement?.type === 'div' ||
+      selectedElement?.type === 'ul' ||
+      selectedElement?.type === 'li') &&
+    selectedIds.length === 1;
 
   const closeContextMenu = () => setContextMenu(null);
 
@@ -792,7 +1090,17 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
     });
 
     try {
-      const dataUrl = stage.toDataURL({ pixelRatio: 2 });
+      const cropX = activeArtboard?.x ?? 0;
+      const cropY = activeArtboard?.y ?? 0;
+      const cropWidth = activeArtboard?.width ?? stage.width();
+      const cropHeight = activeArtboard?.height ?? stage.height();
+      const dataUrl = stage.toDataURL({
+        pixelRatio: 3,
+        x: cropX,
+        y: cropY,
+        width: cropWidth,
+        height: cropHeight,
+      });
       const link = document.createElement('a');
       link.href = dataUrl;
       link.download = 'wireframe-export.png';
@@ -866,6 +1174,45 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
               listening={false}
             />
           ) : null}
+          {snapGuides.map((guide, index) => (
+            <Group key={`${guide.orientation}-${guide.position}-${index}`} listening={false}>
+              <Line
+                points={
+                  guide.orientation === 'vertical'
+                    ? [guide.position, -10000, guide.position, 10000]
+                    : [-10000, guide.position, 10000, guide.position]
+                }
+                stroke="#2563eb"
+                strokeWidth={1}
+                dash={[6, 4]}
+                listening={false}
+              />
+              {guide.label ? (
+                <Rect
+                  x={guide.orientation === 'vertical' ? guide.position + 4 : 8}
+                  y={guide.orientation === 'vertical' ? 8 : guide.position + 4}
+                  width={64}
+                  height={18}
+                  fill="#2563eb"
+                  cornerRadius={4}
+                  listening={false}
+                />
+              ) : null}
+              {guide.label ? (
+                <Text
+                  x={guide.orientation === 'vertical' ? guide.position + 8 : 12}
+                  y={guide.orientation === 'vertical' ? 10 : guide.position + 6}
+                  width={56}
+                  height={14}
+                  text={`${Math.round(guide.distance ?? 0)} px`}
+                  fontSize={10}
+                  fontFamily="Arial, sans-serif"
+                  fill="#ffffff"
+                  listening={false}
+                />
+              ) : null}
+            </Group>
+          ))}
           <Transformer
             ref={transformerRef}
             rotateEnabled={false}
@@ -895,6 +1242,62 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
           />
         </Layer>
       </Stage>
+
+      {inlineEditor && editingElement ? (
+        <div
+          className="absolute z-40"
+          style={{
+            left: stagePos.x + (editingAbsolute?.x ?? 0) * stageScale,
+            top: stagePos.y + (editingAbsolute?.y ?? 0) * stageScale,
+            width: editingElement.width * stageScale,
+            height: editingElement.height * stageScale,
+          }}
+        >
+          {editingElement.type === 'textarea' ? (
+            <textarea
+              autoFocus
+              value={inlineEditor.value}
+              onChange={(event) =>
+                setInlineEditor((current) =>
+                  current ? { ...current, value: event.target.value } : current
+                )
+              }
+              onBlur={commitInlineEdit}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setInlineEditor(null);
+                }
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  commitInlineEdit();
+                }
+              }}
+              className="h-full w-full resize-none rounded border border-blue-400 bg-white px-2 py-1 text-sm outline-none shadow-lg"
+            />
+          ) : (
+            <input
+              autoFocus
+              value={inlineEditor.value}
+              onChange={(event) =>
+                setInlineEditor((current) =>
+                  current ? { ...current, value: event.target.value } : current
+                )
+              }
+              onBlur={commitInlineEdit}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setInlineEditor(null);
+                }
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  commitInlineEdit();
+                }
+              }}
+              className="h-full w-full rounded border border-blue-400 bg-white px-2 py-1 text-sm outline-none shadow-lg"
+            />
+          )}
+        </div>
+      ) : null}
 
       {contextMenu ? (
         <div
@@ -967,7 +1370,12 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
             type="button"
             disabled={!canUngroup}
             onClick={() => {
-              if (selectedElement?.type === 'container') {
+              if (
+                selectedElement?.type === 'container' ||
+                selectedElement?.type === 'div' ||
+                selectedElement?.type === 'ul' ||
+                selectedElement?.type === 'li'
+              ) {
                 ungroupSelected(selectedElement.id);
               }
               closeContextMenu();

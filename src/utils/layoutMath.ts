@@ -6,6 +6,7 @@ import type {
   JustifyContent,
   WireframeElement,
 } from '@/store/useStore';
+import { isSemanticContainerType } from './semantic-html';
 
 export interface LayoutPosition {
   x: number;
@@ -270,7 +271,10 @@ export function isAutoLayoutContainer(element: WireframeElement | null | undefin
 
   return (
     resolveLayoutKind(element) !== 'absolute' &&
-    (element.type === 'artboard' || element.type === 'container' || element.type === 'box')
+    (element.type === 'artboard' ||
+      element.type === 'container' ||
+      element.type === 'box' ||
+      isSemanticContainerType(element.type))
   );
 }
 

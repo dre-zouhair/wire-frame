@@ -18,9 +18,21 @@ import type { ReactNode } from 'react';
 import { useStore, type ElementType } from '@/store/useStore';
 import { getElementChildren } from '@/utils/geometry';
 
-const componentItems: Array<{ type: ElementType; label: string; icon: ReactNode }> = [
+type PaletteElementType = Exclude<ElementType, 'artboard' | 'instance'>;
+
+const componentItems: Array<{ type: PaletteElementType; label: string; icon: ReactNode }> = [
   { type: 'container', label: 'Container', icon: <LayoutGrid className="h-4 w-4" /> },
   { type: 'box', label: 'Box', icon: <Box className="h-4 w-4" /> },
+  { type: 'div', label: 'Div', icon: <LayoutGrid className="h-4 w-4" /> },
+  { type: 'section', label: 'Section', icon: <LayoutGrid className="h-4 w-4" /> },
+  { type: 'header', label: 'Header', icon: <LayoutGrid className="h-4 w-4" /> },
+  { type: 'main', label: 'Main', icon: <LayoutGrid className="h-4 w-4" /> },
+  { type: 'footer', label: 'Footer', icon: <LayoutGrid className="h-4 w-4" /> },
+  { type: 'nav', label: 'Nav', icon: <LayoutGrid className="h-4 w-4" /> },
+  { type: 'aside', label: 'Aside', icon: <LayoutGrid className="h-4 w-4" /> },
+  { type: 'article', label: 'Article', icon: <LayoutGrid className="h-4 w-4" /> },
+  { type: 'ul', label: 'List', icon: <LayoutGrid className="h-4 w-4" /> },
+  { type: 'li', label: 'List Item', icon: <LayoutGrid className="h-4 w-4" /> },
   { type: 'divider', label: 'Divider', icon: <Minus className="h-4 w-4" /> },
   { type: 'heading', label: 'Heading', icon: <Heading1 className="h-4 w-4" /> },
   { type: 'text', label: 'Text', icon: <Type className="h-4 w-4" /> },
@@ -32,7 +44,7 @@ const componentItems: Array<{ type: ElementType; label: string; icon: ReactNode 
   { type: 'toggle', label: 'Toggle', icon: <ToggleLeft className="h-4 w-4" /> },
   { type: 'dropdown', label: 'Dropdown', icon: <ChevronDown className="h-4 w-4" /> },
   { type: 'label', label: 'Label', icon: <Pilcrow className="h-4 w-4" /> },
-  { type: 'image-placeholder', label: 'Image', icon: <Image className="h-4 w-4" /> },
+  { type: 'img', label: 'Image', icon: <Image className="h-4 w-4" /> },
   { type: 'icon', label: 'Icon', icon: <Type className="h-4 w-4" /> },
   { type: 'avatar', label: 'Avatar', icon: <Image className="h-4 w-4" /> },
   { type: 'table', label: 'Table', icon: <LayoutGrid className="h-4 w-4" /> },
@@ -44,6 +56,26 @@ function getLayerLabel(type: ElementType, name?: string, text?: string) {
       return name ?? 'Artboard';
     case 'container':
       return name ?? 'Container';
+    case 'div':
+      return name ?? 'Div';
+    case 'section':
+      return name ?? 'Section';
+    case 'header':
+      return name ?? 'Header';
+    case 'main':
+      return name ?? 'Main';
+    case 'footer':
+      return name ?? 'Footer';
+    case 'nav':
+      return name ?? 'Nav';
+    case 'aside':
+      return name ?? 'Aside';
+    case 'article':
+      return name ?? 'Article';
+    case 'ul':
+      return name ?? 'List';
+    case 'li':
+      return name ?? 'List Item';
     case 'divider':
       return name ?? 'Divider';
     case 'heading':
@@ -66,6 +98,7 @@ function getLayerLabel(type: ElementType, name?: string, text?: string) {
       return name ?? text ?? 'Dropdown';
     case 'label':
       return name ?? text ?? 'Label';
+    case 'img':
     case 'image-placeholder':
       return name ?? 'Image';
     case 'icon':

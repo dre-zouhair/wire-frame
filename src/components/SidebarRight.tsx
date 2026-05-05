@@ -17,29 +17,57 @@ import {
   type FontSize,
   type FontWeight,
   type IconName,
+  type ImageObjectFit,
   type SizeUnit,
   type TextAlign,
   type WireframeElement,
 } from '@/store/useStore';
 import { getElementChildren } from '@/utils/geometry';
+import { validateDocument } from '@/utils/validation';
+import { isSemanticContainerType } from '@/utils/semantic-html';
 
 const typographyTypes = new Set<WireframeElement['type']>([
   'heading',
   'text',
   'button',
+  'label',
   'input',
   'textarea',
-  'label',
+  'dropdown',
 ]);
 const shapeTypes = new Set<WireframeElement['type']>([
   'box',
   'container',
+  'div',
+  'section',
+  'header',
+  'main',
+  'footer',
+  'nav',
+  'aside',
+  'article',
+  'ul',
+  'li',
   'button',
   'input',
   'textarea',
   'dropdown',
 ]);
-const layoutTypes = new Set<WireframeElement['type']>(['container', 'box', 'artboard']);
+const layoutTypes = new Set<WireframeElement['type']>([
+  'container',
+  'box',
+  'div',
+  'section',
+  'header',
+  'main',
+  'footer',
+  'nav',
+  'aside',
+  'article',
+  'ul',
+  'li',
+  'artboard',
+]);
 
 const headingSizes: Record<HeadingVariant, FontSize> = {
   h1: 48,
@@ -80,6 +108,8 @@ export default function SidebarRight() {
   const elements = useStore((state) => state.elements);
   const selectedIds = useStore((state) => state.selectedIds);
   const updateElement = useStore((state) => state.updateElement);
+  const designTokens = useStore((state) => state.designTokens);
+  const updateToken = useStore((state) => state.updateToken);
   const changeArtboardSize = useStore((state) => state.changeArtboardSize);
   const createMasterComponent = useStore((state) => state.createMasterComponent);
   const moveSelectedSibling = useStore((state) => state.moveSelectedSibling);
@@ -98,9 +128,19 @@ export default function SidebarRight() {
   const [name, setName] = useState('');
   const [text, setText] = useState('');
   const [checked, setChecked] = useState(false);
+  const [placeholder, setPlaceholder] = useState('');
+  const [value, setValue] = useState('');
+  const [disabled, setDisabled] = useState(false);
+  const [required, setRequired] = useState(false);
+  const [labelFor, setLabelFor] = useState('');
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('absolute');
   const [inputVariant, setInputVariant] = useState<InputVariant>('text');
   const [headingVariant, setHeadingVariant] = useState<HeadingVariant>('h2');
+  const [inheritTypography, setInheritTypography] = useState(true);
+  const [inheritSpacing, setInheritSpacing] = useState(false);
+  const [inheritFill, setInheritFill] = useState(false);
+  const [inheritBorder, setInheritBorder] = useState(false);
+  const [inheritAlignment, setInheritAlignment] = useState(true);
   const [flexDirection, setFlexDirection] = useState<FlexDirection>('row');
   const [flexWrap, setFlexWrap] = useState<FlexWrap>('nowrap');
   const [justifyContent, setJustifyContent] = useState<JustifyContent>('start');
@@ -119,9 +159,15 @@ export default function SidebarRight() {
   const [textAlign, setTextAlign] = useState<TextAlign>('left');
   const [buttonVariant, setButtonVariant] = useState<ButtonVariant>('primary');
   const [buttonSize, setButtonSize] = useState<ButtonSize>('normal');
+  const [buttonDisabled, setButtonDisabled] = useState(false);
+  const [buttonIconPlacement, setButtonIconPlacement] = useState<'none' | 'left' | 'right'>('none');
+  const [buttonIconName, setButtonIconName] = useState<IconName>('plus');
   const [borderRadius, setBorderRadius] = useState('0');
   const [strokeWidth, setStrokeWidth] = useState('1');
   const [fill, setFill] = useState<FillStyle>('transparent');
+  const [alt, setAlt] = useState('');
+  const [objectFit, setObjectFit] = useState<ImageObjectFit>('contain');
+  const [aspectRatio, setAspectRatio] = useState('1.5');
   const [iconName, setIconName] = useState<IconName>('search');
   const [rows, setRows] = useState('3');
   const [cols, setCols] = useState('3');
@@ -142,9 +188,19 @@ export default function SidebarRight() {
     setName(selectedElement.name ?? '');
     setText(selectedElement.text ?? '');
     setChecked(Boolean(selectedElement.checked));
+    setPlaceholder(selectedElement.placeholder ?? selectedElement.text ?? '');
+    setValue(selectedElement.value ?? '');
+    setDisabled(Boolean(selectedElement.disabled));
+    setRequired(Boolean(selectedElement.required));
+    setLabelFor(selectedElement.labelFor ?? '');
     setLayoutMode(selectedElement.layoutMode ?? 'flex');
     setInputVariant(selectedElement.inputVariant ?? 'text');
     setHeadingVariant(selectedElement.headingVariant ?? 'h2');
+    setInheritTypography(selectedElement.inheritTypography ?? true);
+    setInheritSpacing(selectedElement.inheritSpacing ?? false);
+    setInheritFill(selectedElement.inheritFill ?? false);
+    setInheritBorder(selectedElement.inheritBorder ?? false);
+    setInheritAlignment(selectedElement.inheritAlignment ?? true);
     setFlexDirection(selectedElement.flexDirection ?? 'column');
     setFlexWrap(selectedElement.flexWrap ?? 'nowrap');
     setJustifyContent(selectedElement.justifyContent ?? 'start');
@@ -163,13 +219,115 @@ export default function SidebarRight() {
     setTextAlign(selectedElement.textAlign ?? 'left');
     setButtonVariant(selectedElement.buttonVariant ?? 'primary');
     setButtonSize(selectedElement.buttonSize ?? 'normal');
+    setButtonDisabled(Boolean(selectedElement.buttonDisabled));
+    setButtonIconPlacement(selectedElement.buttonIconPlacement ?? 'none');
+    setButtonIconName(selectedElement.buttonIconName ?? 'plus');
     setBorderRadius(String(selectedElement.borderRadius ?? 0));
     setStrokeWidth(String(selectedElement.strokeWidth ?? 1));
     setFill(selectedElement.fill ?? 'transparent');
+    setAlt(selectedElement.alt ?? selectedElement.text ?? selectedElement.name ?? 'Image');
+    setObjectFit(selectedElement.objectFit ?? 'contain');
+    setAspectRatio(String(selectedElement.aspectRatio ?? 1.5));
     setIconName(selectedElement.iconName ?? 'search');
     setRows(String(selectedElement.rows ?? 3));
     setCols(String(selectedElement.cols ?? 3));
   }, [selectedElement]);
+
+  const colorTokenKeys = Object.keys(designTokens.colors) as Array<keyof typeof designTokens.colors>;
+  const spacingTokenKeys = Object.keys(designTokens.spacing) as Array<
+    keyof typeof designTokens.spacing
+  >;
+  const radiusTokenKeys = Object.keys(designTokens.radius) as Array<keyof typeof designTokens.radius>;
+  const typographyTokenKeys = Object.keys(designTokens.typography) as Array<
+    keyof typeof designTokens.typography
+  >;
+
+  const tokenEditor = (
+    <section className="space-y-3 border-b border-zinc-200 px-4 py-4">
+      <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+        Design Tokens
+      </h2>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+            Colors
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {colorTokenKeys.map((key) => (
+              <label key={key} className="space-y-1 text-xs text-zinc-500">
+                <span className="uppercase tracking-[0.14em]">{key}</span>
+                <input
+                  type="text"
+                  value={designTokens.colors[key]}
+                  onChange={(event) => updateToken('colors', key, event.target.value)}
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-xs outline-none focus:border-zinc-400"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+            Spacing
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {spacingTokenKeys.map((key) => (
+              <label key={key} className="space-y-1 text-xs text-zinc-500">
+                <span className="uppercase tracking-[0.14em]">{key}</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={designTokens.spacing[key]}
+                  onChange={(event) => updateToken('spacing', key, Number(event.target.value) || 0)}
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-xs outline-none focus:border-zinc-400"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+            Radius
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {radiusTokenKeys.map((key) => (
+              <label key={key} className="space-y-1 text-xs text-zinc-500">
+                <span className="uppercase tracking-[0.14em]">{key}</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={designTokens.radius[key]}
+                  onChange={(event) => updateToken('radius', key, Number(event.target.value) || 0)}
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-xs outline-none focus:border-zinc-400"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+            Typography
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {typographyTokenKeys.map((key) => (
+              <label key={key} className="space-y-1 text-xs text-zinc-500">
+                <span className="uppercase tracking-[0.14em]">{key}</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={designTokens.typography[key]}
+                  onChange={(event) =>
+                    updateToken('typography', key, Number(event.target.value) || 0)
+                  }
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-xs outline-none focus:border-zinc-400"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 
   if (!selectedElement) {
     return (
@@ -179,6 +337,7 @@ export default function SidebarRight() {
             Properties
           </h2>
         </div>
+        {tokenEditor}
         <div className="flex flex-1 items-center justify-center p-6">
           <p className="text-sm text-zinc-400">Select an element to edit its properties.</p>
         </div>
@@ -189,9 +348,14 @@ export default function SidebarRight() {
   const supportsTypography = typographyTypes.has(selectedElement.type);
   const supportsShapeProps = shapeTypes.has(selectedElement.type);
   const supportsLayout = layoutTypes.has(selectedElement.type);
-  const supportsBackground = selectedElement.type === 'container' || selectedElement.type === 'artboard';
-  const supportsSurfacePadding = selectedElement.type === 'container' || selectedElement.type === 'artboard';
+  const supportsBackground =
+    selectedElement.type === 'container' ||
+    selectedElement.type === 'artboard' ||
+    isSemanticContainerType(selectedElement.type);
+  const supportsSurfacePadding = supportsBackground;
   const isArtboard = selectedElement.type === 'artboard';
+  const isInput = selectedElement.type === 'input';
+  const isImage = selectedElement.type === 'img' || selectedElement.type === 'image-placeholder';
   const isTable = selectedElement.type === 'table';
   const isIcon = selectedElement.type === 'icon';
   const isMaster = Boolean(selectedElement.isMasterComponent);
@@ -206,6 +370,9 @@ export default function SidebarRight() {
     selectedElement.type === 'instance' && selectedElement.masterComponentId
       ? elements.find((element) => element.id === selectedElement.masterComponentId) ?? null
       : null;
+  const validationWarnings = validateDocument(elements).filter(
+    (warning) => warning.id === selectedElement.id || warning.id === selectedElement.parentId
+  );
 
   const commitPosition = () => {
     updateElement(selectedElement.id, {
@@ -255,6 +422,7 @@ export default function SidebarRight() {
 
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
+          {tokenEditor}
           <div className="space-y-1">
             <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
               Name
@@ -407,25 +575,154 @@ export default function SidebarRight() {
               <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
                 Input
               </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Type
+                  </label>
+                  <select
+                    value={inputVariant}
+                    onChange={(event) => {
+                      const nextVariant = event.target.value as InputVariant;
+                      setInputVariant(nextVariant);
+                      commitElement({ inputVariant: nextVariant });
+                    }}
+                    className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  >
+                    <option value="text">Text</option>
+                    <option value="email">Email</option>
+                    <option value="password">Password</option>
+                    <option value="number">Number</option>
+                    <option value="date">Date</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Placeholder
+                  </label>
+                  <input
+                    type="text"
+                    value={placeholder}
+                    onChange={(event) => {
+                      const nextPlaceholder = event.target.value;
+                      setPlaceholder(nextPlaceholder);
+                      commitElement({
+                        placeholder: nextPlaceholder,
+                        text: nextPlaceholder,
+                      });
+                    }}
+                    className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Value
+                  </label>
+                  <input
+                    type="text"
+                    value={value}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      setValue(nextValue);
+                      commitElement({ value: nextValue });
+                    }}
+                    className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-700">
+                    <input
+                      type="checkbox"
+                      checked={disabled}
+                      onChange={(event) => {
+                        const nextDisabled = event.target.checked;
+                        setDisabled(nextDisabled);
+                        commitElement({ disabled: nextDisabled });
+                      }}
+                      className="h-4 w-4 border-zinc-300 text-zinc-900"
+                    />
+                    Disabled
+                  </label>
+                  <label className="flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-700">
+                    <input
+                      type="checkbox"
+                      checked={required}
+                      onChange={(event) => {
+                        const nextRequired = event.target.checked;
+                        setRequired(nextRequired);
+                        commitElement({ required: nextRequired });
+                      }}
+                      className="h-4 w-4 border-zinc-300 text-zinc-900"
+                    />
+                    Required
+                  </label>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {isImage ? (
+            <section className="space-y-3 border-t border-zinc-200 pt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                Image
+              </h3>
               <div className="space-y-1">
                 <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                  Variant
+                  Alt Text
                 </label>
-                <select
-                  value={inputVariant}
+                <input
+                  type="text"
+                  value={alt}
                   onChange={(event) => {
-                    const nextVariant = event.target.value as InputVariant;
-                    setInputVariant(nextVariant);
-                    commitElement({ inputVariant: nextVariant });
+                    const nextAlt = event.target.value;
+                    setAlt(nextAlt);
+                    commitElement({ alt: nextAlt });
                   }}
                   className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
-                >
-                  <option value="text">Text</option>
-                  <option value="email">Email</option>
-                  <option value="password">Password</option>
-                  <option value="number">Number</option>
-                  <option value="date">Date</option>
-                </select>
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Object Fit
+                  </label>
+                  <select
+                    value={objectFit}
+                    onChange={(event) => {
+                      const nextFit = event.target.value as ImageObjectFit;
+                      setObjectFit(nextFit);
+                      commitElement({ objectFit: nextFit });
+                    }}
+                    className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  >
+                    <option value="contain">Contain</option>
+                    <option value="cover">Cover</option>
+                    <option value="fill">Fill</option>
+                    <option value="none">None</option>
+                    <option value="scale-down">Scale Down</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Aspect Ratio
+                  </label>
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="0.01"
+                    value={aspectRatio}
+                    onChange={(event) => {
+                      const nextRatio = event.target.value;
+                      setAspectRatio(nextRatio);
+                      commitElement({
+                        aspectRatio: Number(nextRatio) > 0 ? Number(nextRatio) : undefined,
+                      });
+                    }}
+                    className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  />
+                </div>
               </div>
             </section>
           ) : null}
@@ -520,6 +817,56 @@ export default function SidebarRight() {
                   <option value="right">Right</option>
                 </select>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Font Token
+                  </label>
+                  <select
+                    value={selectedElement.fontSizeToken ?? 'none'}
+                    onChange={(event) =>
+                      commitElement({
+                        fontSizeToken:
+                          event.target.value === 'none'
+                            ? undefined
+                            : (event.target.value as keyof typeof designTokens.typography),
+                      })
+                    }
+                    className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  >
+                    <option value="none">None</option>
+                    {typographyTokenKeys.map((key) => (
+                      <option key={key} value={key}>
+                        {key}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Text Token
+                  </label>
+                  <select
+                    value={selectedElement.textColorToken ?? 'none'}
+                    onChange={(event) =>
+                      commitElement({
+                        textColorToken:
+                          event.target.value === 'none'
+                            ? undefined
+                            : (event.target.value as keyof typeof designTokens.colors),
+                      })
+                    }
+                    className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  >
+                    <option value="none">None</option>
+                    {colorTokenKeys.map((key) => (
+                      <option key={key} value={key}>
+                        {key}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </section>
           ) : null}
 
@@ -567,6 +914,73 @@ export default function SidebarRight() {
                   </select>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-700">
+                  <input
+                    type="checkbox"
+                    checked={buttonDisabled}
+                    onChange={(event) => {
+                      const nextDisabled = event.target.checked;
+                      setButtonDisabled(nextDisabled);
+                      commitElement({ buttonDisabled: nextDisabled });
+                    }}
+                    className="h-4 w-4 border-zinc-300 text-zinc-900"
+                  />
+                  Disabled
+                </label>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Icon Placement
+                  </label>
+                  <select
+                    value={buttonIconPlacement}
+                    onChange={(event) => {
+                      const nextPlacement = event.target.value as 'none' | 'left' | 'right';
+                      setButtonIconPlacement(nextPlacement);
+                      commitElement({ buttonIconPlacement: nextPlacement });
+                    }}
+                    className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  >
+                    <option value="none">None</option>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                  </select>
+                </div>
+              </div>
+              {buttonIconPlacement !== 'none' ? (
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Icon
+                  </label>
+                  <select
+                    value={buttonIconName}
+                    onChange={(event) => {
+                      const nextIcon = event.target.value as IconName;
+                      setButtonIconName(nextIcon);
+                      commitElement({ buttonIconName: nextIcon });
+                    }}
+                    className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  >
+                    <option value="menu">Menu</option>
+                    <option value="search">Search</option>
+                    <option value="user">User</option>
+                    <option value="home">Home</option>
+                    <option value="settings">Settings</option>
+                    <option value="chevron-left">Chevron Left</option>
+                    <option value="chevron-right">Chevron Right</option>
+                    <option value="chevron-up">Chevron Up</option>
+                    <option value="chevron-down">Chevron Down</option>
+                    <option value="chevrons-left">Double Left</option>
+                    <option value="chevrons-right">Double Right</option>
+                    <option value="sort-asc">Sort Asc</option>
+                    <option value="sort-desc">Sort Desc</option>
+                    <option value="ellipsis">More</option>
+                    <option value="plus">Plus</option>
+                    <option value="minus">Minus</option>
+                    <option value="x">Close</option>
+                  </select>
+                </div>
+              ) : null}
             </section>
           ) : null}
 
@@ -612,6 +1026,30 @@ export default function SidebarRight() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Stroke Token
+                </label>
+                <select
+                  value={selectedElement.strokeColorToken ?? 'none'}
+                  onChange={(event) =>
+                    commitElement({
+                      strokeColorToken:
+                        event.target.value === 'none'
+                          ? undefined
+                          : (event.target.value as keyof typeof designTokens.colors),
+                    })
+                  }
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                >
+                  <option value="none">None</option>
+                  {colorTokenKeys.map((key) => (
+                    <option key={key} value={key}>
+                      {key}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
                   {supportsBackground ? 'Background' : 'Fill Style'}
                 </label>
                 <select
@@ -633,6 +1071,58 @@ export default function SidebarRight() {
                   </p>
                 ) : null}
               </div>
+              {supportsBackground ? (
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Background Token
+                  </label>
+                  <select
+                    value={selectedElement.fillToken ?? 'none'}
+                    onChange={(event) =>
+                      commitElement({
+                        fillToken:
+                          event.target.value === 'none'
+                            ? undefined
+                            : (event.target.value as keyof typeof designTokens.colors),
+                      })
+                    }
+                    className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  >
+                    <option value="none">None</option>
+                    {colorTokenKeys.map((key) => (
+                      <option key={key} value={key}>
+                        {key}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+              {supportsShapeProps ? (
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Radius Token
+                  </label>
+                  <select
+                    value={selectedElement.borderRadiusToken ?? 'none'}
+                    onChange={(event) =>
+                      commitElement({
+                        borderRadiusToken:
+                          event.target.value === 'none'
+                            ? undefined
+                            : (event.target.value as keyof typeof designTokens.radius),
+                      })
+                    }
+                    className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  >
+                    <option value="none">None</option>
+                    {radiusTokenKeys.map((key) => (
+                      <option key={key} value={key}>
+                        {key}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
             </section>
           ) : null}
 
@@ -664,6 +1154,30 @@ export default function SidebarRight() {
                   </p>
                 </div>
               ) : null}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Spacing Token
+                </label>
+                <select
+                  value={selectedElement.spacingToken ?? 'none'}
+                  onChange={(event) =>
+                    commitLayout({
+                      spacingToken:
+                        event.target.value === 'none'
+                          ? undefined
+                          : (event.target.value as keyof typeof designTokens.spacing),
+                    })
+                  }
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+                >
+                  <option value="none">None</option>
+                  {spacingTokenKeys.map((key) => (
+                    <option key={key} value={key}>
+                      {key}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
                   Layout Mode
@@ -1126,6 +1640,83 @@ export default function SidebarRight() {
 
           <section className="space-y-3 border-t border-zinc-200 pt-4">
             <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              Inheritance
+            </h3>
+            <p className="text-[11px] leading-4 text-zinc-400">
+              Toggle which property groups inherit from parent containers. Turn a toggle off to
+              keep the local value.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-700">
+                <input
+                  type="checkbox"
+                  checked={inheritTypography}
+                  onChange={(event) => {
+                    const nextValue = event.target.checked;
+                    setInheritTypography(nextValue);
+                    commitElement({ inheritTypography: nextValue });
+                  }}
+                  className="h-4 w-4 border-zinc-300 text-zinc-900"
+                />
+                Typography
+              </label>
+              <label className="flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-700">
+                <input
+                  type="checkbox"
+                  checked={inheritAlignment}
+                  onChange={(event) => {
+                    const nextValue = event.target.checked;
+                    setInheritAlignment(nextValue);
+                    commitElement({ inheritAlignment: nextValue });
+                  }}
+                  className="h-4 w-4 border-zinc-300 text-zinc-900"
+                />
+                Alignment
+              </label>
+              <label className="flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-700">
+                <input
+                  type="checkbox"
+                  checked={inheritSpacing}
+                  onChange={(event) => {
+                    const nextValue = event.target.checked;
+                    setInheritSpacing(nextValue);
+                    commitElement({ inheritSpacing: nextValue });
+                  }}
+                  className="h-4 w-4 border-zinc-300 text-zinc-900"
+                />
+                Spacing
+              </label>
+              <label className="flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-700">
+                <input
+                  type="checkbox"
+                  checked={inheritBorder}
+                  onChange={(event) => {
+                    const nextValue = event.target.checked;
+                    setInheritBorder(nextValue);
+                    commitElement({ inheritBorder: nextValue });
+                  }}
+                  className="h-4 w-4 border-zinc-300 text-zinc-900"
+                />
+                Border
+              </label>
+              <label className="flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-700">
+                <input
+                  type="checkbox"
+                  checked={inheritFill}
+                  onChange={(event) => {
+                    const nextValue = event.target.checked;
+                    setInheritFill(nextValue);
+                    commitElement({ inheritFill: nextValue });
+                  }}
+                  className="h-4 w-4 border-zinc-300 text-zinc-900"
+                />
+                Fill
+              </label>
+            </div>
+          </section>
+
+          <section className="space-y-3 border-t border-zinc-200 pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
               Component
             </h3>
             {isMaster ? (
@@ -1153,6 +1744,28 @@ export default function SidebarRight() {
             ) : null}
           </section>
 
+          {validationWarnings.length > 0 ? (
+            <section className="space-y-2 border-t border-zinc-200 pt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                Validation
+              </h3>
+              <div className="space-y-2">
+                {validationWarnings.map((warning) => (
+                  <div
+                    key={`${warning.id}-${warning.message}`}
+                    className={`rounded-md border px-3 py-2 text-xs ${
+                      warning.severity === 'error'
+                        ? 'border-red-200 bg-red-50 text-red-700'
+                        : 'border-amber-200 bg-amber-50 text-amber-700'
+                    }`}
+                  >
+                    {warning.message}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           {selectedElement.type === 'checkbox' ||
           selectedElement.type === 'radio' ||
           selectedElement.type === 'toggle' ? (
@@ -1171,7 +1784,7 @@ export default function SidebarRight() {
             </label>
           ) : null}
 
-          {selectedElement.text != null ? (
+          {selectedElement.text != null && !isInput ? (
             <div className="space-y-1">
               <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
                 Text
@@ -1181,6 +1794,24 @@ export default function SidebarRight() {
                 value={text}
                 onChange={(event) => setText(event.target.value)}
                 onBlur={() => commitElement({ text })}
+                className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
+              />
+            </div>
+          ) : null}
+
+          {selectedElement.type === 'label' ? (
+            <div className="space-y-1">
+              <label className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                Target Element ID
+              </label>
+              <input
+                type="text"
+                value={labelFor}
+                onChange={(event) => {
+                  const nextTarget = event.target.value;
+                  setLabelFor(nextTarget);
+                  commitElement({ labelFor: nextTarget });
+                }}
                 className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-zinc-400"
               />
             </div>

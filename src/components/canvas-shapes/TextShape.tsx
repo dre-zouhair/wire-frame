@@ -1,6 +1,6 @@
 import { Text } from 'react-konva';
 import type { ShapeProps } from './types';
-import { resolveFontSize, resolveFontStyle, resolveKonvaAlign } from './shared';
+import { resolveFontSize, resolveFontStyle, resolveKonvaAlign, resolveTextColor } from './shared';
 
 function measureTextWidth(text: string, fontSize: number, fontWeight: 'normal' | 'bold') {
   if (typeof document === 'undefined') {
@@ -23,7 +23,9 @@ export default function TextShape({
   draggable = true,
   interactive = true,
   onDragEnd,
+  onDragMove,
   onSelect,
+  onEditStart,
 }: ShapeProps) {
   const isInteractive = interactive !== false;
   const fontSize = resolveFontSize(element.fontSize, 16);
@@ -43,7 +45,7 @@ export default function TextShape({
       fontSize={fontSize}
       fontStyle={resolveFontStyle(fontWeight)}
       fontFamily="Arial, sans-serif"
-      fill="#2f2f2f"
+      fill={resolveTextColor(element.textColor, element.fill)}
       align={resolveKonvaAlign(element.textAlign ?? 'left')}
       verticalAlign="middle"
       draggable={draggable && isInteractive}
@@ -53,6 +55,7 @@ export default function TextShape({
       }}
       onDragMove={(e) => {
         e.cancelBubble = true;
+        onDragMove?.(element.id, e.target.x(), e.target.y(), e.target);
       }}
       onClick={(e) => {
         e.cancelBubble = true;
@@ -61,6 +64,10 @@ export default function TextShape({
       onTap={(e) => {
         e.cancelBubble = true;
         onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
+      }}
+      onDblClick={(e) => {
+        e.cancelBubble = true;
+        onEditStart?.(element.id);
       }}
       onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
       shadowEnabled={isSelected}

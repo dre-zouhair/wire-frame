@@ -5,9 +5,9 @@ import {
   resolveFontSize,
   resolveFontStyle,
   resolveKonvaAlign,
-  resolveReadableTextColor,
   resolveStrokeColor,
   resolveStrokeWidth,
+  resolveTextColor,
 } from './shared';
 
 export default function DropdownShape({
@@ -16,7 +16,9 @@ export default function DropdownShape({
   draggable = true,
   interactive = true,
   onDragEnd,
+  onDragMove,
   onSelect,
+  onEditStart,
 }: ShapeProps) {
   const isInteractive = interactive !== false;
   return (
@@ -31,6 +33,7 @@ export default function DropdownShape({
       }}
       onDragMove={(e) => {
         e.cancelBubble = true;
+        onDragMove?.(element.id, e.target.x(), e.target.y(), e.target);
       }}
       onClick={(e) => {
         e.cancelBubble = true;
@@ -40,12 +43,16 @@ export default function DropdownShape({
         e.cancelBubble = true;
         onSelect(element.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
       }}
+      onDblClick={(e) => {
+        e.cancelBubble = true;
+        onEditStart?.(element.id);
+      }}
       onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
     >
       <Rect
         width={element.width}
         height={element.height}
-        fill={resolveFill(element.fill)}
+        fill={resolveFill(element.fill, element.backgroundColor)}
         stroke={resolveStrokeColor(element, isSelected, '#8a8a8a')}
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
         cornerRadius={element.borderRadius ?? 3}
@@ -63,7 +70,7 @@ export default function DropdownShape({
         fontSize={resolveFontSize(element.fontSize, 16)}
         fontStyle={resolveFontStyle(element.fontWeight)}
         fontFamily="Arial, sans-serif"
-        fill={resolveReadableTextColor(element.fill)}
+        fill={resolveTextColor(element.textColor, element.fill)}
         align={resolveKonvaAlign(element.textAlign ?? 'left')}
         verticalAlign="middle"
       />
