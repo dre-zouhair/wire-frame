@@ -16,6 +16,8 @@ export default function TopBar({ stageRef }: TopBarProps) {
   const createPage = useStore((state) => state.createPage);
   const setActivePage = useStore((state) => state.setActivePage);
   const deletePage = useStore((state) => state.deletePage);
+  const pageDragEnabled = useStore((state) => state.pageDragEnabled);
+  const setPageDragEnabled = useStore((state) => state.setPageDragEnabled);
   const changeArtboardSize = useStore((state) => state.changeArtboardSize);
   const groupSelected = useStore((state) => state.groupSelected);
   const ungroupSelected = useStore((state) => state.ungroupSelected);
@@ -102,9 +104,18 @@ export default function TopBar({ stageRef }: TopBarProps) {
             }
           }}
           className="h-9 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
+          >
           Delete Page
         </button>
+        <label className="flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700">
+          <input
+            type="checkbox"
+            checked={pageDragEnabled}
+            onChange={(event) => setPageDragEnabled(event.target.checked)}
+            className="h-4 w-4 rounded border-zinc-300 text-zinc-700"
+          />
+          Drag Page
+        </label>
       </div>
 
       <div className="flex items-center gap-3">

@@ -188,48 +188,6 @@ export function getCompositeBounds(
   };
 }
 
-export function getLayoutChildPosition(
-  parent: WireframeElement,
-  siblings: WireframeElement[],
-  child: WireframeElement,
-  index: number
-) {
-  const layoutMode = parent.layoutMode ?? 'absolute';
-  if (layoutMode === 'absolute') {
-    return { x: child.x, y: child.y };
-  }
-
-  const gap = parent.gap ?? 0;
-  const padding = parent.padding ?? 0;
-  const align = parent.align ?? 'start';
-
-  if (layoutMode === 'vertical') {
-    const contentWidth = Math.max(0, parent.width - padding * 2);
-    const y = padding + siblings.slice(0, index).reduce((sum, sibling) => sum + sibling.height + gap, 0);
-    let x = padding;
-
-    if (align === 'center') {
-      x = padding + Math.max(0, (contentWidth - child.width) / 2);
-    } else if (align === 'end') {
-      x = padding + Math.max(0, contentWidth - child.width);
-    }
-
-    return { x, y };
-  }
-
-  const contentHeight = Math.max(0, parent.height - padding * 2);
-  const x = padding + siblings.slice(0, index).reduce((sum, sibling) => sum + sibling.width + gap, 0);
-  let y = padding;
-
-  if (align === 'center') {
-    y = padding + Math.max(0, (contentHeight - child.height) / 2);
-  } else if (align === 'end') {
-    y = padding + Math.max(0, contentHeight - child.height);
-  }
-
-  return { x, y };
-}
-
 export function findBestDropParent(
   elements: WireframeElement[],
   movingId: string,

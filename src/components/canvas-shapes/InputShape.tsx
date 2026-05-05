@@ -6,16 +6,45 @@ import {
   resolveFontStyle,
   resolveKonvaAlign,
   resolveReadableTextColor,
+  resolveStrokeColor,
   resolveStrokeWidth,
 } from './shared';
 
-export default function InputShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
+function getInputPlaceholder(variant?: 'text' | 'email' | 'password' | 'number' | 'date') {
+  switch (variant) {
+    case 'email':
+      return 'Email';
+    case 'password':
+      return '******';
+    case 'number':
+      return '123';
+    case 'date':
+      return 'YYYY-MM-DD';
+    case 'text':
+    default:
+      return 'Text';
+  }
+}
+
+export default function InputShape({
+  element,
+  isSelected,
+  draggable = true,
+  interactive = true,
+  onDragEnd,
+  onSelect,
+}: ShapeProps) {
+  const isInteractive = interactive !== false;
+  const variant = element.inputVariant ?? 'text';
+  const displayText =
+    element.text && element.text !== 'Input' ? element.text : getInputPlaceholder(variant);
   return (
     <Group
       id={element.id}
       x={element.x}
       y={element.y}
-      draggable={draggable}
+      draggable={draggable && isInteractive}
+      listening={isInteractive}
       onDragStart={(e) => {
         e.cancelBubble = true;
       }}
@@ -36,7 +65,7 @@ export default function InputShape({ element, isSelected, draggable = true, onDr
         width={element.width}
         height={element.height}
         fill={resolveFill(element.fill)}
-        stroke={isSelected ? '#111111' : '#7a7a7a'}
+        stroke={resolveStrokeColor(element, isSelected, '#7a7a7a')}
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
         cornerRadius={element.borderRadius ?? 3}
         shadowEnabled={isSelected}
@@ -49,7 +78,7 @@ export default function InputShape({ element, isSelected, draggable = true, onDr
         y={0}
         width={element.width - 20}
         height={element.height}
-        text={element.text ?? 'Input'}
+        text={displayText}
         fontSize={resolveFontSize(element.fontSize, 16)}
         fontStyle={resolveFontStyle(element.fontWeight)}
         fontFamily="Arial, sans-serif"

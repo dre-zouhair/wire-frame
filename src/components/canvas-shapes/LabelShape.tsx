@@ -2,16 +2,7 @@ import { Text } from 'react-konva';
 import type { ShapeProps } from './types';
 import { resolveFontSize, resolveFontStyle, resolveKonvaAlign } from './shared';
 
-const headingSizes = {
-  h1: 48,
-  h2: 36,
-  h3: 30,
-  h4: 24,
-  h5: 20,
-  h6: 16,
-} as const;
-
-export default function HeadingShape({
+export default function LabelShape({
   element,
   isSelected,
   draggable = true,
@@ -20,7 +11,6 @@ export default function HeadingShape({
   onSelect,
 }: ShapeProps) {
   const isInteractive = interactive !== false;
-  const variant = element.headingVariant ?? 'h2';
   return (
     <Text
       id={element.id}
@@ -28,9 +18,9 @@ export default function HeadingShape({
       y={element.y}
       width={element.width}
       height={element.height}
-      text={element.text ?? 'Heading'}
-      fontSize={resolveFontSize(element.fontSize, headingSizes[variant])}
-      fontStyle={resolveFontStyle(element.fontWeight ?? 'bold')}
+      text={element.text ?? 'Label'}
+      fontSize={resolveFontSize(element.fontSize, 16)}
+      fontStyle={resolveFontStyle(element.fontWeight)}
       fontFamily="Arial, sans-serif"
       fill="#202020"
       align={resolveKonvaAlign(element.textAlign ?? 'left')}
@@ -55,7 +45,7 @@ export default function HeadingShape({
       shadowEnabled={isSelected}
       shadowColor="#000000"
       shadowBlur={10}
-      shadowOpacity={0.12}
+      shadowOpacity={0.08}
     />
   );
 }

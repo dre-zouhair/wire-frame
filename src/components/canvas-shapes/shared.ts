@@ -1,4 +1,4 @@
-import type { FillStyle, FontSize, FontWeight, TextAlign } from '@/store/useStore';
+import type { FillStyle, FontSize, FontWeight, TextAlign, WireframeElement } from '@/store/useStore';
 
 export function resolveFill(fill?: FillStyle) {
   switch (fill) {
@@ -30,4 +30,16 @@ export function resolveKonvaAlign(textAlign?: TextAlign) {
 
 export function resolveReadableTextColor(fill?: FillStyle) {
   return fill === 'solid' ? '#ffffff' : '#2f2f2f';
+}
+
+export function resolveStrokeColor(
+  element: Pick<WireframeElement, 'isMasterComponent'>,
+  isSelected: boolean,
+  fallback: string
+) {
+  if (element.isMasterComponent) {
+    return '#a855f7';
+  }
+
+  return isSelected ? '#111111' : fallback;
 }

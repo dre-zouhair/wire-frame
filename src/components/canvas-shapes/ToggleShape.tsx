@@ -1,7 +1,6 @@
-import { Group, Rect, RegularPolygon, Text } from 'react-konva';
+import { Circle, Group, Rect, Text } from 'react-konva';
 import type { ShapeProps } from './types';
 import {
-  resolveFill,
   resolveFontSize,
   resolveFontStyle,
   resolveKonvaAlign,
@@ -10,7 +9,7 @@ import {
   resolveStrokeWidth,
 } from './shared';
 
-export default function DropdownShape({
+export default function ToggleShape({
   element,
   isSelected,
   draggable = true,
@@ -19,6 +18,14 @@ export default function DropdownShape({
   onSelect,
 }: ShapeProps) {
   const isInteractive = interactive !== false;
+  const trackWidth = 42;
+  const trackHeight = 24;
+  const trackY = Math.max(0, (element.height - trackHeight) / 2);
+  const trackX = 0;
+  const knobRadius = 8;
+  const knobX = element.checked ? trackX + trackWidth - knobRadius - 5 : trackX + knobRadius + 5;
+  const knobY = trackY + trackHeight / 2;
+
   return (
     <Group
       id={element.id}
@@ -43,37 +50,32 @@ export default function DropdownShape({
       onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
     >
       <Rect
-        width={element.width}
-        height={element.height}
-        fill={resolveFill(element.fill)}
-        stroke={resolveStrokeColor(element, isSelected, '#8a8a8a')}
+        x={trackX}
+        y={trackY}
+        width={trackWidth}
+        height={trackHeight}
+        cornerRadius={trackHeight / 2}
+        fill={element.checked ? '#4b5563' : '#e5e7eb'}
+        stroke={resolveStrokeColor(element, isSelected, '#7a7a7a')}
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
-        cornerRadius={element.borderRadius ?? 3}
         shadowEnabled={isSelected}
         shadowColor="#000000"
-        shadowBlur={12}
+        shadowBlur={10}
         shadowOpacity={0.12}
       />
+      <Circle x={knobX} y={knobY} radius={knobRadius} fill="#ffffff" stroke="#9ca3af" strokeWidth={1} />
       <Text
-        x={10}
+        x={56}
         y={0}
-        width={element.width - 28}
+        width={Math.max(0, element.width - 56)}
         height={element.height}
-        text={element.text ?? 'Dropdown'}
+        text={element.text ?? 'Toggle'}
         fontSize={resolveFontSize(element.fontSize, 16)}
         fontStyle={resolveFontStyle(element.fontWeight)}
         fontFamily="Arial, sans-serif"
         fill={resolveReadableTextColor(element.fill)}
         align={resolveKonvaAlign(element.textAlign ?? 'left')}
         verticalAlign="middle"
-      />
-      <RegularPolygon
-        x={element.width - 14}
-        y={element.height / 2 - 1}
-        sides={3}
-        radius={5}
-        fill={resolveStrokeColor(element, isSelected, '#666666')}
-        rotation={180}
       />
     </Group>
   );

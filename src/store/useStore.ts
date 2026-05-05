@@ -11,6 +11,7 @@ import {
   isDescendantOf,
   scaleSubtree,
   toRelativePosition,
+  type Point,
 } from '@/utils/geometry';
 
 export type ElementType =
@@ -22,20 +23,59 @@ export type ElementType =
   | 'text'
   | 'button'
   | 'input'
+  | 'textarea'
   | 'checkbox'
+  | 'radio'
+  | 'toggle'
   | 'dropdown'
+  | 'label'
   | 'image-placeholder'
   | 'icon'
   | 'avatar'
-  | 'table';
+  | 'table'
+  | 'instance';
 
-export type LayoutMode = 'absolute' | 'vertical' | 'horizontal';
-export type Alignment = 'start' | 'center' | 'end';
+export type LayoutMode = 'absolute' | 'flex' | 'grid';
+export type FlexDirection = 'row' | 'column';
+export type FlexWrap = 'nowrap' | 'wrap' | 'wrap-reverse';
+export type JustifyContent =
+  | 'start'
+  | 'center'
+  | 'end'
+  | 'space-between'
+  | 'space-around'
+  | 'space-evenly';
+export type AlignItems = 'start' | 'center' | 'end' | 'stretch';
+export type AlignContent = 'start' | 'center' | 'end' | 'space-between' | 'space-around' | 'stretch';
+export type GridAutoFlow = 'row' | 'column';
+export type GridAlign = 'start' | 'center' | 'end' | 'stretch';
 export type FillStyle = 'solid' | 'light' | 'transparent';
-export type FontSize = 12 | 16 | 24 | 36 | 48;
+export type FontSize = 12 | 16 | 20 | 24 | 30 | 36 | 48;
 export type FontWeight = 'normal' | 'bold';
 export type TextAlign = 'left' | 'center' | 'right';
-export type IconName = 'menu' | 'search' | 'user' | 'home' | 'settings';
+export type SizeUnit = 'px' | 'vw' | 'vh';
+export type InputVariant = 'text' | 'email' | 'password' | 'number' | 'date';
+export type HeadingVariant = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'warning';
+export type ButtonSize = 'small' | 'normal' | 'large';
+export type IconName =
+  | 'menu'
+  | 'search'
+  | 'user'
+  | 'home'
+  | 'settings'
+  | 'chevron-left'
+  | 'chevron-right'
+  | 'chevron-up'
+  | 'chevron-down'
+  | 'sort-asc'
+  | 'sort-desc'
+  | 'chevrons-left'
+  | 'chevrons-right'
+  | 'ellipsis'
+  | 'plus'
+  | 'minus'
+  | 'x';
 
 export interface WireframeElement {
   id: string;
@@ -46,15 +86,33 @@ export interface WireframeElement {
   width: number;
   height: number;
   parentId: string | null;
+  widthUnit?: SizeUnit;
+  heightUnit?: SizeUnit;
   text?: string;
   checked?: boolean;
   layoutMode?: LayoutMode;
-  gap?: number;
+  gapX?: number;
+  gapY?: number;
   padding?: number;
-  align?: Alignment;
+  flexDirection?: FlexDirection;
+  flexWrap?: FlexWrap;
+  justifyContent?: JustifyContent;
+  alignItems?: AlignItems;
+  alignContent?: AlignContent;
+  gridColumns?: number;
+  gridRows?: number;
+  gridAutoFlow?: GridAutoFlow;
+  gridJustifyItems?: GridAlign;
+  gridAlignItems?: GridAlign;
+  isMasterComponent?: boolean;
+  masterComponentId?: string;
   fontSize?: FontSize;
   fontWeight?: FontWeight;
   textAlign?: TextAlign;
+  headingVariant?: HeadingVariant;
+  inputVariant?: InputVariant;
+  buttonVariant?: ButtonVariant;
+  buttonSize?: ButtonSize;
   borderRadius?: number;
   strokeWidth?: number;
   fill?: FillStyle;
@@ -77,17 +135,23 @@ interface AppState {
   selectedIds: string[];
   activeArtboardId: string;
   clipboard: WireframeElement[];
-  addElement: (type: Exclude<ElementType, 'artboard'>) => void;
+  pageDragEnabled: boolean;
+  addElement: (type: Exclude<ElementType, 'artboard' | 'instance'>) => void;
+  createMasterComponent: (selectedId: string) => void;
+  createInstance: (masterId: string) => void;
   createPage: () => void;
   setActivePage: (pageId: string) => void;
   deletePage: (pageId: string) => void;
+  setPageDragEnabled: (enabled: boolean) => void;
   setSelection: (ids: string[]) => void;
   selectElement: (id: string | null, additive?: boolean) => void;
   copy: () => void;
   paste: () => void;
+  pasteAt: (position: Point, targetParentId?: string | null) => void;
   duplicate: () => void;
   copySelected: () => void;
   pasteClipboard: () => void;
+  moveSelectedSibling: (direction: 'up' | 'down') => void;
   updateElement: (id: string, newProps: Partial<WireframeElement>) => void;
   transformElement: (
     id: string,
@@ -114,16 +178,36 @@ function generateId(): string {
 }
 
 const defaultElementSize: Record<
-  Exclude<ElementType, 'artboard'>,
+  Exclude<ElementType, 'artboard' | 'instance'>,
   Pick<WireframeElement, 'width' | 'height'> &
     Partial<
       Pick<
         WireframeElement,
+        | 'layoutMode'
+        | 'gapX'
+        | 'gapY'
+        | 'padding'
+        | 'flexDirection'
+        | 'flexWrap'
+        | 'justifyContent'
+        | 'alignItems'
+        | 'alignContent'
+        | 'gridColumns'
+        | 'gridRows'
+        | 'gridAutoFlow'
+        | 'gridJustifyItems'
+        | 'gridAlignItems'
+        | 'widthUnit'
+        | 'heightUnit'
         | 'text'
         | 'checked'
         | 'fontSize'
         | 'fontWeight'
         | 'textAlign'
+        | 'headingVariant'
+        | 'inputVariant'
+        | 'buttonVariant'
+        | 'buttonSize'
         | 'borderRadius'
         | 'strokeWidth'
         | 'fill'
@@ -133,9 +217,53 @@ const defaultElementSize: Record<
       >
     >
 > = {
-  container: { width: 240, height: 160, borderRadius: 0, strokeWidth: 1, fill: 'transparent' },
-  box: { width: 240, height: 160, borderRadius: 0, strokeWidth: 1, fill: 'transparent' },
-  divider: { width: 240, height: 1, strokeWidth: 1 },
+  container: {
+    width: 240,
+    height: 160,
+    borderRadius: 0,
+    strokeWidth: 1,
+    fill: 'transparent',
+    layoutMode: 'flex',
+    gapX: 0,
+    gapY: 0,
+    padding: 0,
+    flexDirection: 'column',
+    flexWrap: 'nowrap',
+    justifyContent: 'start',
+    alignItems: 'start',
+    alignContent: 'start',
+    gridColumns: 2,
+    gridRows: 2,
+    gridAutoFlow: 'row',
+    gridJustifyItems: 'start',
+    gridAlignItems: 'start',
+    widthUnit: 'px',
+    heightUnit: 'px',
+  },
+  box: {
+    width: 240,
+    height: 160,
+    borderRadius: 0,
+    strokeWidth: 1,
+    fill: 'transparent',
+    layoutMode: 'flex',
+    gapX: 0,
+    gapY: 0,
+    padding: 0,
+    flexDirection: 'column',
+    flexWrap: 'nowrap',
+    justifyContent: 'start',
+    alignItems: 'start',
+    alignContent: 'start',
+    gridColumns: 2,
+    gridRows: 2,
+    gridAutoFlow: 'row',
+    gridJustifyItems: 'start',
+    gridAlignItems: 'start',
+    widthUnit: 'px',
+    heightUnit: 'px',
+  },
+  divider: { width: 240, height: 1, strokeWidth: 1, widthUnit: 'px', heightUnit: 'px' },
   heading: {
     width: 320,
     height: 48,
@@ -143,36 +271,62 @@ const defaultElementSize: Record<
     fontSize: 36,
     fontWeight: 'bold',
     textAlign: 'left',
+    headingVariant: 'h2',
+    widthUnit: 'px',
+    heightUnit: 'px',
   },
   text: {
-    width: 240,
+    width: 120,
     height: 28,
     text: 'Text',
     fontSize: 16,
     fontWeight: 'normal',
     textAlign: 'left',
+    widthUnit: 'px',
+    heightUnit: 'px',
   },
   button: {
-    width: 140,
+    width: 96,
     height: 40,
     text: 'Button',
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
+    buttonVariant: 'primary',
+    buttonSize: 'normal',
     borderRadius: 6,
     strokeWidth: 1,
     fill: 'solid',
+    widthUnit: 'px',
+    heightUnit: 'px',
   },
   input: {
     width: 240,
     height: 40,
     text: 'Input',
+    inputVariant: 'text',
     fontSize: 16,
     fontWeight: 'normal',
     textAlign: 'left',
     borderRadius: 4,
     strokeWidth: 1,
     fill: 'transparent',
+    widthUnit: 'px',
+    heightUnit: 'px',
+  },
+  textarea: {
+    width: 240,
+    height: 96,
+    text: 'Textarea',
+    inputVariant: 'text',
+    fontSize: 16,
+    fontWeight: 'normal',
+    textAlign: 'left',
+    borderRadius: 4,
+    strokeWidth: 1,
+    fill: 'transparent',
+    widthUnit: 'px',
+    heightUnit: 'px',
   },
   checkbox: {
     width: 180,
@@ -182,6 +336,30 @@ const defaultElementSize: Record<
     fontSize: 16,
     fontWeight: 'normal',
     textAlign: 'left',
+    widthUnit: 'px',
+    heightUnit: 'px',
+  },
+  radio: {
+    width: 180,
+    height: 24,
+    text: 'Radio',
+    checked: false,
+    fontSize: 16,
+    fontWeight: 'normal',
+    textAlign: 'left',
+    widthUnit: 'px',
+    heightUnit: 'px',
+  },
+  toggle: {
+    width: 180,
+    height: 28,
+    text: 'Toggle',
+    checked: false,
+    fontSize: 16,
+    fontWeight: 'normal',
+    textAlign: 'left',
+    widthUnit: 'px',
+    heightUnit: 'px',
   },
   dropdown: {
     width: 240,
@@ -193,11 +371,23 @@ const defaultElementSize: Record<
     borderRadius: 4,
     strokeWidth: 1,
     fill: 'transparent',
+    widthUnit: 'px',
+    heightUnit: 'px',
   },
-  'image-placeholder': { width: 240, height: 160 },
-  icon: { width: 32, height: 32, iconName: 'search' },
-  avatar: { width: 48, height: 48 },
-  table: { width: 320, height: 180, rows: 3, cols: 3 },
+  label: {
+    width: 120,
+    height: 24,
+    text: 'Label',
+    fontSize: 16,
+    fontWeight: 'normal',
+    textAlign: 'left',
+    widthUnit: 'px',
+    heightUnit: 'px',
+  },
+  'image-placeholder': { width: 240, height: 160, widthUnit: 'px', heightUnit: 'px' },
+  icon: { width: 32, height: 32, iconName: 'search', widthUnit: 'px', heightUnit: 'px' },
+  avatar: { width: 48, height: 48, widthUnit: 'px', heightUnit: 'px' },
+  table: { width: 320, height: 180, rows: 3, cols: 3, widthUnit: 'px', heightUnit: 'px' },
 };
 
 function getDefaultElementName(type: ElementType, index = 1) {
@@ -218,10 +408,18 @@ function getDefaultElementName(type: ElementType, index = 1) {
       return 'Button';
     case 'input':
       return 'Input';
+    case 'textarea':
+      return 'Textarea';
     case 'checkbox':
       return 'Checkbox';
+    case 'radio':
+      return 'Radio';
+    case 'toggle':
+      return 'Toggle';
     case 'dropdown':
       return 'Dropdown';
+    case 'label':
+      return 'Label';
     case 'image-placeholder':
       return 'Image';
     case 'icon':
@@ -230,6 +428,8 @@ function getDefaultElementName(type: ElementType, index = 1) {
       return 'Avatar';
     case 'table':
       return 'Table';
+    case 'instance':
+      return 'Instance';
     default:
       return type;
   }
@@ -322,6 +522,86 @@ function normalizeContainers(elements: WireframeElement[], _changedIds: string[]
   return elements;
 }
 
+function moveSelectedSiblingInState(
+  elements: WireframeElement[],
+  selectedIds: string[],
+  direction: 'up' | 'down'
+) {
+  const lookup = buildElementLookup(elements);
+  const selectedId = [...selectedIds].reverse().find((id) => lookup.has(id));
+  if (!selectedId) {
+    return elements;
+  }
+
+  const element = lookup.get(selectedId) ?? null;
+  if (!element || !element.parentId) {
+    return elements;
+  }
+
+  const siblings = elements.filter((item) => item.parentId === element.parentId);
+  const siblingIds = siblings.map((item) => item.id);
+  const currentSiblingIndex = siblingIds.indexOf(selectedId);
+  if (currentSiblingIndex < 0) {
+    return elements;
+  }
+
+  const offset = direction === 'up' ? -1 : 1;
+  const nextSiblingIndex = currentSiblingIndex + offset;
+  if (nextSiblingIndex < 0 || nextSiblingIndex >= siblingIds.length) {
+    return elements;
+  }
+
+  const siblingBefore = siblingIds[Math.min(currentSiblingIndex, nextSiblingIndex)];
+  const siblingAfter = siblingIds[Math.max(currentSiblingIndex, nextSiblingIndex)];
+  const firstIndex = elements.findIndex((item) => item.id === siblingBefore);
+  const secondIndex = elements.findIndex((item) => item.id === siblingAfter);
+
+  if (firstIndex < 0 || secondIndex < 0) {
+    return elements;
+  }
+
+  const reordered = [...elements];
+  const [moving] = reordered.splice(secondIndex, 1);
+  reordered.splice(firstIndex, 0, moving);
+  return reordered;
+}
+
+function reorderChildrenByPosition(elements: WireframeElement[], parentId: string) {
+  const parentChildren = elements.filter((item) => item.parentId === parentId);
+  if (parentChildren.length < 2) {
+    return elements;
+  }
+
+  const lookup = buildElementLookup(elements);
+  const parent = lookup.get(parentId) ?? null;
+  const layoutMode = parent?.layoutMode ?? 'absolute';
+  const childIds = new Set(parentChildren.map((item) => item.id));
+  const sortedChildren = [...parentChildren].sort((a, b) => {
+    if (layoutMode === 'flex' && (parent?.flexDirection ?? 'row') === 'row') {
+      return a.x - b.x || a.y - b.y || a.id.localeCompare(b.id);
+    }
+
+    return a.y - b.y || a.x - b.x || a.id.localeCompare(b.id);
+  });
+
+  const nextElements: WireframeElement[] = [];
+  let inserted = false;
+
+  for (const element of elements) {
+    if (!childIds.has(element.id)) {
+      nextElements.push(element);
+      continue;
+    }
+
+    if (!inserted) {
+      nextElements.push(...sortedChildren);
+      inserted = true;
+    }
+  }
+
+  return nextElements;
+}
+
 function collectClipboard(elements: WireframeElement[], selectedIds: string[]) {
   const lookup = buildElementLookup(elements);
   const roots = filterSelectionToTopLevel(selectedIds, elements);
@@ -354,14 +634,19 @@ function buildPasteResult(
   elements: WireframeElement[],
   clipboard: WireframeElement[],
   selectedIds: string[],
-  activeArtboardId: string
+  activeArtboardId: string,
+  options: { anchorPoint?: Point; targetParentId?: string | null } = {}
 ) {
   if (!clipboard.length) {
     return null;
   }
 
   const lookup = buildElementLookup(elements);
-  const targetParent = getSelectionParent(elements, selectedIds, activeArtboardId);
+  const requestedParent = options.targetParentId ? lookup.get(options.targetParentId) ?? null : null;
+  const targetParent =
+    requestedParent && PARENTABLE_TYPES.has(requestedParent.type)
+      ? requestedParent
+      : getSelectionParent(elements, selectedIds, activeArtboardId);
   const targetParentAbsolute = targetParent ? getAbsolutePosition(targetParent, lookup) : { x: 0, y: 0 };
   const clipboardLookup = buildElementLookup(clipboard);
   const clipboardRoots = getClipboardRoots(clipboard);
@@ -372,8 +657,27 @@ function buildPasteResult(
 
   const nextElements = [...elements];
   const pastedRootIds: string[] = [];
+  const clipboardBounds = calculateBoundingBox(
+    clipboard.map((element) => element.id),
+    clipboardLookup
+  );
+  const anchorPoint =
+    options.anchorPoint ??
+    (targetParent
+      ? {
+          x: targetParentAbsolute.x + targetParent.width / 2,
+          y: targetParentAbsolute.y + targetParent.height / 2,
+        }
+      : clipboardBounds
+        ? {
+            x: clipboardBounds.x,
+            y: clipboardBounds.y,
+          }
+        : { x: 0, y: 0 });
+  const deltaX = anchorPoint.x - (clipboardBounds?.x ?? 0);
+  const deltaY = anchorPoint.y - (clipboardBounds?.y ?? 0);
 
-  clipboardRoots.forEach((root, index) => {
+  clipboardRoots.forEach((root) => {
     const subtreeIds = new Set<string>([root.id]);
     for (const descendant of getDescendants(clipboard, root.id)) {
       subtreeIds.add(descendant.id);
@@ -385,13 +689,12 @@ function buildPasteResult(
       idMap.set(element.id, generateId());
     }
 
-    const offset = 20 * (index + 1);
     const absoluteByOldId = new Map<string, { x: number; y: number }>();
     for (const element of subtree) {
       const absolute = getAbsolutePosition(element, clipboardLookup);
       absoluteByOldId.set(element.id, {
-        x: absolute.x + offset,
-        y: absolute.y + offset,
+        x: absolute.x + deltaX,
+        y: absolute.y + deltaY,
       });
     }
 
@@ -458,11 +761,23 @@ export const useStore = create<AppState>()(
             width: 1440,
             height: 900,
             parentId: null,
+            layoutMode: 'flex',
+            gapX: 0,
+            gapY: 0,
+            padding: 0,
+            flexDirection: 'column',
+            flexWrap: 'nowrap',
+            justifyContent: 'start',
+            alignItems: 'start',
+            alignContent: 'start',
+            widthUnit: 'px',
+            heightUnit: 'px',
           },
         ],
         selectedIds: [],
         activeArtboardId: ROOT_ARTBOARD_ID,
         clipboard: [],
+        pageDragEnabled: false,
 
         addElement: (type) =>
           set((state) => {
@@ -494,15 +809,31 @@ export const useStore = create<AppState>()(
               y,
               width: defaults.width,
               height: defaults.height,
+              widthUnit: defaults.widthUnit ?? 'px',
+              heightUnit: defaults.heightUnit ?? 'px',
               text: defaults.text,
               checked: defaults.checked,
               layoutMode: defaults.layoutMode ?? 'absolute',
-              gap: defaults.gap ?? 0,
+              gapX: defaults.gapX ?? 0,
+              gapY: defaults.gapY ?? 0,
               padding: defaults.padding ?? 0,
-              align: defaults.align ?? 'start',
+              flexDirection: defaults.flexDirection ?? 'row',
+              flexWrap: defaults.flexWrap ?? 'nowrap',
+              justifyContent: defaults.justifyContent ?? 'start',
+              alignItems: defaults.alignItems ?? 'start',
+              alignContent: defaults.alignContent ?? 'start',
+              gridColumns: defaults.gridColumns,
+              gridRows: defaults.gridRows,
+              gridAutoFlow: defaults.gridAutoFlow ?? 'row',
+              gridJustifyItems: defaults.gridJustifyItems ?? 'start',
+              gridAlignItems: defaults.gridAlignItems ?? 'start',
               fontSize: defaults.fontSize,
               fontWeight: defaults.fontWeight,
               textAlign: defaults.textAlign,
+              headingVariant: defaults.headingVariant,
+              inputVariant: defaults.inputVariant,
+              buttonVariant: defaults.buttonVariant,
+              buttonSize: defaults.buttonSize,
               borderRadius: defaults.borderRadius,
               strokeWidth: defaults.strokeWidth,
               fill: defaults.fill,
@@ -519,6 +850,110 @@ export const useStore = create<AppState>()(
             };
           }),
 
+        createMasterComponent: (selectedId) =>
+          set((state) => {
+            const lookup = buildElementLookup(state.elements);
+            const element = lookup.get(selectedId);
+            if (
+              !element ||
+              element.type === 'artboard' ||
+              element.type === 'instance' ||
+              element.isMasterComponent
+            ) {
+              return state;
+            }
+
+            const subtreeIds = new Set<string>([selectedId]);
+            for (const descendant of getDescendants(state.elements, selectedId)) {
+              subtreeIds.add(descendant.id);
+            }
+
+            const subtree = state.elements.filter((item) => subtreeIds.has(item.id));
+            if (!subtree.length) {
+              return state;
+            }
+
+            const idMap = new Map<string, string>();
+            for (const item of subtree) {
+              idMap.set(item.id, generateId());
+            }
+
+            const masterRootId = idMap.get(selectedId);
+            if (!masterRootId) {
+              return state;
+            }
+
+            const masterElements = subtree.map((item) => {
+              const newId = idMap.get(item.id);
+              if (!newId) {
+                return item;
+              }
+
+              const newParentId = item.id === selectedId ? null : item.parentId ? idMap.get(item.parentId) ?? null : null;
+
+              return {
+                ...item,
+                id: newId,
+                parentId: newParentId,
+                x: item.id === selectedId ? 0 : item.x,
+                y: item.id === selectedId ? 0 : item.y,
+                isMasterComponent: item.id === selectedId ? true : item.isMasterComponent,
+              };
+            });
+
+            return {
+              elements: [...state.elements, ...masterElements],
+              selectedIds: [masterRootId],
+            };
+          }),
+
+        createInstance: (masterId) =>
+          set((state) => {
+            const lookup = buildElementLookup(state.elements);
+            const master = lookup.get(masterId);
+            if (!master || !master.isMasterComponent || master.type === 'artboard') {
+              return state;
+            }
+
+            const activeArtboard = getActiveArtboard(state.elements, state.activeArtboardId);
+            if (!activeArtboard) {
+              return state;
+            }
+
+            const selectedParent = getSelectionParent(
+              state.elements,
+              state.selectedIds,
+              state.activeArtboardId
+            );
+            const parent =
+              selectedParent &&
+              PARENTABLE_TYPES.has(selectedParent.type) &&
+              selectedParent.id !== master.id &&
+              !isDescendantOf(selectedParent.id, master.id, lookup)
+                ? selectedParent
+                : activeArtboard;
+
+            const x = Math.max(0, parent.width / 2 - master.width / 2);
+            const y = Math.max(0, parent.height / 2 - master.height / 2);
+
+            const instance: WireframeElement = {
+              id: generateId(),
+              type: 'instance',
+              name: `${master.name ?? getDefaultElementName(master.type)} Instance`,
+              parentId: parent.id,
+              x,
+              y,
+              width: master.width,
+              height: master.height,
+              masterComponentId: master.id,
+            };
+
+            return {
+              elements: [...state.elements, instance],
+              selectedIds: [instance.id],
+            };
+          }),
+
         createPage: () =>
           set((state) => {
             const position = getNextPagePosition(state.elements);
@@ -532,6 +967,17 @@ export const useStore = create<AppState>()(
               width: 1440,
               height: 900,
               parentId: null,
+              layoutMode: 'flex',
+              gapX: 0,
+              gapY: 0,
+              padding: 0,
+              flexDirection: 'column',
+              flexWrap: 'nowrap',
+              justifyContent: 'start',
+              alignItems: 'start',
+              alignContent: 'start',
+              widthUnit: 'px',
+              heightUnit: 'px',
             };
 
             return {
@@ -572,6 +1018,11 @@ export const useStore = create<AppState>()(
 
             const idsToDelete = new Set<string>([page.id]);
             for (const descendant of getDescendants(state.elements, page.id)) {
+              const element = state.elements.find((item) => item.id === descendant.id) ?? null;
+              if (element?.isMasterComponent) {
+                continue;
+              }
+
               idsToDelete.add(descendant.id);
             }
 
@@ -584,6 +1035,11 @@ export const useStore = create<AppState>()(
               selectedIds: nextActivePage ? [nextActivePage.id] : [],
             };
           }),
+
+        setPageDragEnabled: (enabled) =>
+          set(() => ({
+            pageDragEnabled: enabled,
+          })),
 
         setSelection: (ids) =>
           set((state) => ({
@@ -633,6 +1089,26 @@ export const useStore = create<AppState>()(
               return state;
             }
 
+    return {
+      elements: pasted.elements,
+      selectedIds: pasted.selectedIds,
+    };
+  }),
+
+        pasteAt: (position, targetParentId) =>
+          set((state) => {
+            const pasted = buildPasteResult(
+              state.elements,
+              state.clipboard,
+              state.selectedIds,
+              state.activeArtboardId,
+              { anchorPoint: position, targetParentId }
+            );
+
+            if (!pasted) {
+              return state;
+            }
+
             return {
               elements: pasted.elements,
               selectedIds: pasted.selectedIds,
@@ -662,6 +1138,11 @@ export const useStore = create<AppState>()(
 
         copySelected: () => get().copy(),
         pasteClipboard: () => get().paste(),
+
+        moveSelectedSibling: (direction) =>
+          set((state) => ({
+            elements: moveSelectedSiblingInState(state.elements, state.selectedIds, direction),
+          })),
 
         updateElement: (id, newProps) =>
           set((state) => {
@@ -771,8 +1252,16 @@ export const useStore = create<AppState>()(
                 : item
             );
 
+            let reordered = nextElements;
+            if (previousParentId) {
+              reordered = reorderChildrenByPosition(reordered, previousParentId);
+            }
+            if (nextParentId) {
+              reordered = reorderChildrenByPosition(reordered, nextParentId);
+            }
+
             return {
-              elements: normalizeContainers(nextElements, [
+              elements: normalizeContainers(reordered, [
                 id,
                 previousParentId ?? '',
                 nextParentId ?? '',
@@ -821,12 +1310,21 @@ export const useStore = create<AppState>()(
               }
 
               const element = state.elements.find((item) => item.id === id) ?? null;
+              if (element?.isMasterComponent) {
+                continue;
+              }
+
               if (element?.parentId) {
                 affectedParentIds.add(element.parentId);
               }
 
               idsToDelete.add(id);
               for (const descendant of getDescendants(state.elements, id)) {
+                const descendantElement = state.elements.find((item) => item.id === descendant.id) ?? null;
+                if (descendantElement?.isMasterComponent) {
+                  continue;
+                }
+
                 idsToDelete.add(descendant.id);
               }
             }
@@ -890,6 +1388,17 @@ export const useStore = create<AppState>()(
               y: bounds.y - parentAbsolute.y,
               width: bounds.width,
               height: bounds.height,
+              layoutMode: 'flex',
+              gapX: 0,
+              gapY: 0,
+              padding: 0,
+              flexDirection: 'column',
+              flexWrap: 'nowrap',
+              justifyContent: 'start',
+              alignItems: 'start',
+              alignContent: 'start',
+              widthUnit: 'px',
+              heightUnit: 'px',
             };
 
             const nextElements = state.elements.map((element) => {
@@ -961,15 +1470,20 @@ export const useStore = create<AppState>()(
           }),
       }),
       {
-        partialize: (state) => ({ elements: state.elements }),
+        partialize: (state) => ({
+          elements: state.elements,
+          activeArtboardId: state.activeArtboardId,
+          pageDragEnabled: state.pageDragEnabled,
+        }),
       }
     ),
-    {
-      name: 'wireframe-storage',
-      partialize: (state) => ({
-        elements: state.elements,
-        activeArtboardId: state.activeArtboardId,
-      }),
-    }
-  )
-);
+      {
+        name: 'wireframe-storage',
+        partialize: (state) => ({
+          elements: state.elements,
+          activeArtboardId: state.activeArtboardId,
+          pageDragEnabled: state.pageDragEnabled,
+        }),
+      }
+    )
+  );

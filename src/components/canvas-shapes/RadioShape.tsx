@@ -1,7 +1,6 @@
-import { Group, Rect, RegularPolygon, Text } from 'react-konva';
+import { Circle, Group, Text } from 'react-konva';
 import type { ShapeProps } from './types';
 import {
-  resolveFill,
   resolveFontSize,
   resolveFontStyle,
   resolveKonvaAlign,
@@ -10,7 +9,7 @@ import {
   resolveStrokeWidth,
 } from './shared';
 
-export default function DropdownShape({
+export default function RadioShape({
   element,
   isSelected,
   draggable = true,
@@ -19,6 +18,9 @@ export default function DropdownShape({
   onSelect,
 }: ShapeProps) {
   const isInteractive = interactive !== false;
+  const radius = 8;
+  const centerY = element.height / 2;
+
   return (
     <Group
       id={element.id}
@@ -42,38 +44,33 @@ export default function DropdownShape({
       }}
       onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
     >
-      <Rect
-        width={element.width}
-        height={element.height}
-        fill={resolveFill(element.fill)}
-        stroke={resolveStrokeColor(element, isSelected, '#8a8a8a')}
+      <Circle
+        x={radius + 2}
+        y={centerY}
+        radius={radius}
+        fill="#ffffff"
+        stroke={resolveStrokeColor(element, isSelected, '#7a7a7a')}
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
-        cornerRadius={element.borderRadius ?? 3}
         shadowEnabled={isSelected}
         shadowColor="#000000"
-        shadowBlur={12}
+        shadowBlur={10}
         shadowOpacity={0.12}
       />
+      {element.checked ? (
+        <Circle x={radius + 2} y={centerY} radius={radius - 4} fill="#111827" />
+      ) : null}
       <Text
-        x={10}
+        x={24}
         y={0}
-        width={element.width - 28}
+        width={Math.max(0, element.width - 24)}
         height={element.height}
-        text={element.text ?? 'Dropdown'}
+        text={element.text ?? 'Radio'}
         fontSize={resolveFontSize(element.fontSize, 16)}
         fontStyle={resolveFontStyle(element.fontWeight)}
         fontFamily="Arial, sans-serif"
         fill={resolveReadableTextColor(element.fill)}
         align={resolveKonvaAlign(element.textAlign ?? 'left')}
         verticalAlign="middle"
-      />
-      <RegularPolygon
-        x={element.width - 14}
-        y={element.height / 2 - 1}
-        sides={3}
-        radius={5}
-        fill={resolveStrokeColor(element, isSelected, '#666666')}
-        rotation={180}
       />
     </Group>
   );

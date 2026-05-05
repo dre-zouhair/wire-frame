@@ -1,20 +1,23 @@
 import { Group, Line, Rect } from 'react-konva';
 import type { ShapeProps } from './types';
-import { resolveFill, resolveStrokeWidth } from './shared';
+import { resolveFill, resolveStrokeColor, resolveStrokeWidth } from './shared';
 
 export default function ImagePlaceholderShape({
   element,
   isSelected,
   draggable = true,
+  interactive = true,
   onDragEnd,
   onSelect,
 }: ShapeProps) {
+  const isInteractive = interactive !== false;
   return (
     <Group
       id={element.id}
       x={element.x}
       y={element.y}
-      draggable={draggable}
+      draggable={draggable && isInteractive}
+      listening={isInteractive}
       onDragStart={(e) => {
         e.cancelBubble = true;
       }}
@@ -35,7 +38,7 @@ export default function ImagePlaceholderShape({
         width={element.width}
         height={element.height}
         fill={resolveFill(element.fill)}
-        stroke={isSelected ? '#111111' : '#333333'}
+        stroke={resolveStrokeColor(element, isSelected, '#333333')}
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
         cornerRadius={element.borderRadius ?? 0}
         shadowEnabled={isSelected}
@@ -45,12 +48,12 @@ export default function ImagePlaceholderShape({
       />
       <Line
         points={[0, 0, element.width, element.height]}
-        stroke="#a3a3a3"
+        stroke={resolveStrokeColor(element, isSelected, '#a3a3a3')}
         strokeWidth={1}
       />
       <Line
         points={[element.width, 0, 0, element.height]}
-        stroke="#a3a3a3"
+        stroke={resolveStrokeColor(element, isSelected, '#a3a3a3')}
         strokeWidth={1}
       />
     </Group>

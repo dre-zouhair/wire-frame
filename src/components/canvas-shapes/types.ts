@@ -5,6 +5,7 @@ export interface ShapeProps {
   element: WireframeElement;
   isSelected: boolean;
   draggable?: boolean;
+  interactive?: boolean;
   onDragEnd: (id: string, x: number, y: number) => void;
   onSelect: (id: string, additive: boolean) => void;
 }

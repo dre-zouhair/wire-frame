@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType, ReactNode, RefObject } from 'react';
-import { Layer, Rect, Stage, Transformer } from 'react-konva';
+import { Group, Layer, Rect, Stage, Transformer } from 'react-konva';
 import type Konva from 'konva';
 import { useStore, type ElementType, type WireframeElement } from '@/store/useStore';
 import BoxShape from './canvas-shapes/BoxShape';
@@ -15,6 +15,10 @@ import DropdownShape from './canvas-shapes/DropdownShape';
 import HeadingShape from './canvas-shapes/HeadingShape';
 import ImagePlaceholderShape from './canvas-shapes/ImagePlaceholderShape';
 import InputShape from './canvas-shapes/InputShape';
+import TextareaShape from './canvas-shapes/TextareaShape';
+import RadioShape from './canvas-shapes/RadioShape';
+import ToggleShape from './canvas-shapes/ToggleShape';
+import LabelShape from './canvas-shapes/LabelShape';
 import TextShape from './canvas-shapes/TextShape';
 import ArtboardShape from './canvas-shapes/ArtboardShape';
 import {
@@ -23,10 +27,13 @@ import {
   getAbsolutePosition,
   getDescendants,
   getElementChildren,
-  getLayoutChildPosition,
-  isAutoLayoutContainer,
   rectsIntersect,
 } from '@/utils/geometry';
+import {
+  calculateAutoLayout,
+  getDirectLayoutChildren,
+  isAutoLayoutContainer,
+} from '@/utils/layoutMath';
 
 interface CanvasAreaProps {
   width: number;
@@ -42,8 +49,12 @@ const leafShapes: Partial<Record<Exclude<ElementType, 'artboard' | 'container'>,
     text: TextShape,
     button: ButtonShape,
     input: InputShape,
+    textarea: TextareaShape,
     checkbox: CheckboxShape,
+    radio: RadioShape,
+    toggle: ToggleShape,
     dropdown: DropdownShape,
+    label: LabelShape,
     'image-placeholder': ImagePlaceholderShape,
     icon: IconShape,
     avatar: AvatarShape,
@@ -58,13 +69,19 @@ const transformableTypes = new Set<ElementType>([
   'text',
   'button',
   'input',
+  'textarea',
   'checkbox',
+  'radio',
+  'toggle',
   'dropdown',
+  'label',
   'image-placeholder',
   'icon',
   'avatar',
   'table',
 ]);
+
+const pasteTargetTypes = new Set<ElementType>(['artboard', 'container', 'box']);
 
 interface Point {
   x: number;
@@ -96,23 +113,22 @@ function buildSelectionRect(start: Point, end: Point): SelectionRect {
 
 function buildVisibleRectMap(elements: WireframeElement[]) {
   const lookup = buildElementLookup(elements);
-  const rects = new Map<string, { x: number; y: number; width: number; height: number }>();
+  const rawRects = new Map<string, { x: number; y: number; width: number; height: number }>();
 
   const visit = (element: WireframeElement, parentAbsolute = { x: 0, y: 0 }) => {
     const parent = element.parentId ? lookup.get(element.parentId) ?? null : null;
-    const siblings = parent ? getElementChildren(elements, parent.id) : [];
-    const index = siblings.findIndex((child) => child.id === element.id);
-    const relative =
-      parent && isAutoLayoutContainer(parent) && index >= 0
-        ? getLayoutChildPosition(parent, siblings, element, index)
-        : { x: element.x, y: element.y };
+    const layoutPositions =
+      parent && isAutoLayoutContainer(parent)
+        ? calculateAutoLayout(parent, getDirectLayoutChildren(parent, elements))
+        : null;
+    const relative = layoutPositions?.get(element.id) ?? { x: element.x, y: element.y };
 
     const absolute = {
       x: parentAbsolute.x + relative.x,
       y: parentAbsolute.y + relative.y,
     };
 
-    rects.set(element.id, {
+    rawRects.set(element.id, {
       x: absolute.x,
       y: absolute.y,
       width: element.width,
@@ -128,24 +144,63 @@ function buildVisibleRectMap(elements: WireframeElement[]) {
     visit(element);
   }
 
-  for (const element of elements.filter(
-    (item) => item.type === 'container' || item.type === 'box'
-  )) {
-    const bounds = getVisualBoundsForContainer(element, elements, rects);
-    const absolute = rects.get(element.id);
-    if (!absolute) {
-      continue;
+  const renderedRects = new Map(rawRects);
+  const visualBoundsCache = new Map<string, { x: number; y: number; width: number; height: number }>();
+
+  const computeVisualBounds = (element: WireframeElement) => {
+    const cached = visualBoundsCache.get(element.id);
+    if (cached) {
+      return cached;
     }
 
-    rects.set(element.id, {
-      x: absolute.x + bounds.x,
-      y: absolute.y + bounds.y,
-      width: bounds.width,
-      height: bounds.height,
-    });
+    const ownBounds = rawRects.get(element.id);
+    if (!ownBounds || (element.type !== 'container' && element.type !== 'box')) {
+      const fallback = ownBounds ?? { x: 0, y: 0, width: element.width, height: element.height };
+      visualBoundsCache.set(element.id, fallback);
+      return fallback;
+    }
+
+    let minX = 0;
+    let minY = 0;
+    let maxX = element.width;
+    let maxY = element.height;
+
+    for (const child of getElementChildren(elements, element.id)) {
+      const childBounds = rawRects.get(child.id);
+      if (!childBounds) {
+        continue;
+      }
+      const childRelative = {
+        x: childBounds.x - ownBounds.x,
+        y: childBounds.y - ownBounds.y,
+      };
+
+      minX = Math.min(minX, childRelative.x);
+      minY = Math.min(minY, childRelative.y);
+      maxX = Math.max(maxX, childRelative.x + childBounds.width);
+      maxY = Math.max(maxY, childRelative.y + childBounds.height);
+    }
+
+    const bounds = {
+      x: ownBounds.x + minX,
+      y: ownBounds.y + minY,
+      width: maxX - minX,
+      height: maxY - minY,
+    };
+    visualBoundsCache.set(element.id, bounds);
+    return bounds;
+  };
+
+  for (const element of elements.filter((item) => item.type === 'artboard')) {
+    computeVisualBounds(element);
   }
 
-  return rects;
+  for (const element of elements.filter((item) => item.type === 'container' || item.type === 'box')) {
+    const bounds = computeVisualBounds(element);
+    renderedRects.set(element.id, bounds);
+  }
+
+  return renderedRects;
 }
 
 function getVisualBoundsForContainer(
@@ -153,24 +208,30 @@ function getVisualBoundsForContainer(
   elements: WireframeElement[],
   renderedRects: Map<string, { x: number; y: number; width: number; height: number }>
 ) {
-  const lookup = buildElementLookup(elements);
-  const elementAbsolute = getAbsolutePosition(element, lookup);
+  const ownBounds = renderedRects.get(element.id) ?? {
+    x: element.x,
+    y: element.y,
+    width: element.width,
+    height: element.height,
+  };
 
   let minX = 0;
   let minY = 0;
   let maxX = element.width;
   let maxY = element.height;
 
-  for (const descendant of getDescendants(elements, element.id)) {
-    const rect = renderedRects.get(descendant.id);
+  for (const child of getElementChildren(elements, element.id)) {
+    const rect = renderedRects.get(child.id);
     if (!rect) {
       continue;
     }
 
-    minX = Math.min(minX, rect.x - elementAbsolute.x);
-    minY = Math.min(minY, rect.y - elementAbsolute.y);
-    maxX = Math.max(maxX, rect.x - elementAbsolute.x + rect.width);
-    maxY = Math.max(maxY, rect.y - elementAbsolute.y + rect.height);
+    const childRelativeX = rect.x - ownBounds.x;
+    const childRelativeY = rect.y - ownBounds.y;
+    minX = Math.min(minX, childRelativeX);
+    minY = Math.min(minY, childRelativeY);
+    maxX = Math.max(maxX, childRelativeX + rect.width);
+    maxY = Math.max(maxY, childRelativeY + rect.height);
   }
 
   return {
@@ -185,9 +246,14 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
   const elements = useStore((state) => state.elements);
   const selectedIds = useStore((state) => state.selectedIds);
   const activeArtboardId = useStore((state) => state.activeArtboardId);
+  const pageDragEnabled = useStore((state) => state.pageDragEnabled);
   const setSelection = useStore((state) => state.setSelection);
   const setActivePage = useStore((state) => state.setActivePage);
   const selectElement = useStore((state) => state.selectElement);
+  const copy = useStore((state) => state.copy);
+  const pasteAt = useStore((state) => state.pasteAt);
+  const groupSelected = useStore((state) => state.groupSelected);
+  const ungroupSelected = useStore((state) => state.ungroupSelected);
   const transformElement = useStore((state) => state.transformElement);
   const reparentElement = useStore((state) => state.reparentElement);
   const [stageScale, setStageScale] = useState(1);
@@ -198,6 +264,12 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState<Point | null>(null);
   const [selectionCurrent, setSelectionCurrent] = useState<Point | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    clientX: number;
+    clientY: number;
+    worldPoint: Point;
+    targetParentId: string;
+  } | null>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
   const activeArtboardRef = useRef<WireframeElement | null>(null);
 
@@ -279,6 +351,25 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
   }, []);
 
   useEffect(() => {
+    const handlePointerDown = () => {
+      setContextMenu(null);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setContextMenu(null);
+      }
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
+
+  useEffect(() => {
     const stage = stageRef.current;
     if (!stage) {
       return;
@@ -308,9 +399,7 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
         if (!element || element.type === 'artboard' || !transformableTypes.has(element.type)) {
           return false;
         }
-
-        const parent = element.parentId ? elementById.get(element.parentId) ?? null : null;
-        return !parent || (parent.layoutMode ?? 'absolute') === 'absolute';
+        return true;
       });
 
     transformer.nodes(nodes);
@@ -432,6 +521,41 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
     setSelectionCurrent(worldPoint);
   };
 
+  const openContextMenu = (event: Konva.KonvaEventObject<PointerEvent>) => {
+    event.evt.preventDefault();
+
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+
+    const pointer = stage.getPointerPosition();
+    if (!pointer) {
+      return;
+    }
+
+    const worldPoint = toWorldPoint(pointer, stagePos, stageScale);
+    let node: Konva.Node | null = event.target;
+    let targetParentId = activeArtboardRef.current?.id ?? activeArtboardId;
+
+    while (node) {
+      const element = elementById.get(node.id());
+      if (element && pasteTargetTypes.has(element.type)) {
+        targetParentId = element.id;
+        break;
+      }
+
+      node = node.getParent();
+    }
+
+    setContextMenu({
+      clientX: event.evt.clientX,
+      clientY: event.evt.clientY,
+      worldPoint,
+      targetParentId,
+    });
+  };
+
   const handleDragEnd = (id: string, x: number, y: number) => {
     const element = elementById.get(id);
     if (!element) {
@@ -484,78 +608,157 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
     transformElement(element.id, node.x(), node.y(), nextWidth, nextHeight, scaleX, scaleY);
   };
 
-  const renderNode = (element: WireframeElement, parent: WireframeElement | null = null): ReactNode => {
-    const isSelected = selectedIds.includes(element.id);
-    const children = getElementChildren(elements, element.id);
-    const siblings = parent ? getElementChildren(elements, parent.id) : [];
-    const index = siblings.findIndex((child) => child.id === element.id);
-    const displayElement =
-      parent && isAutoLayoutContainer(parent) && index >= 0
-        ? {
-            ...element,
-            ...getLayoutChildPosition(parent, siblings, element, index),
-          }
-        : element;
-    const draggable = !parent || (parent.layoutMode ?? 'absolute') === 'absolute';
+  interface RenderOptions {
+    interactive?: boolean;
+    keyPrefix?: string;
+    visitedMasters?: Set<string>;
+    forcePosition?: Point;
+  }
 
-    if (element.type === 'artboard') {
+  const renderNode = (
+    sourceElement: WireframeElement,
+    parent: WireframeElement | null = null,
+    options: RenderOptions = {}
+  ): ReactNode => {
+    const interactive = options.interactive !== false;
+    const keyPrefix = options.keyPrefix ? `${options.keyPrefix}__` : '';
+    const isSelected = selectedIds.includes(sourceElement.id);
+    const parentChildren = parent ? getElementChildren(elements, parent.id) : [];
+    const parentLayoutPositions =
+      parent && isAutoLayoutContainer(parent) ? calculateAutoLayout(parent, parentChildren) : null;
+    const displayPosition = options.forcePosition ?? parentLayoutPositions?.get(sourceElement.id) ?? {
+      x: sourceElement.x,
+      y: sourceElement.y,
+    };
+
+    if (sourceElement.type === 'instance') {
+      const master =
+        sourceElement.masterComponentId
+          ? elementById.get(sourceElement.masterComponentId) ?? null
+          : null;
+
+      return (
+        <Group
+          key={`${keyPrefix}${sourceElement.id}`}
+          id={`${keyPrefix}${sourceElement.id}`}
+          x={displayPosition.x}
+          y={displayPosition.y}
+          listening
+          draggable={false}
+          onClick={(e) => {
+            e.cancelBubble = true;
+            handleSelect(sourceElement.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
+          }}
+          onTap={(e) => {
+            e.cancelBubble = true;
+            handleSelect(sourceElement.id, e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey);
+          }}
+        >
+          <Rect
+            x={0}
+            y={0}
+            width={sourceElement.width}
+            height={sourceElement.height}
+            fill="rgba(255,255,255,0.001)"
+            stroke={isSelected ? '#111111' : '#a855f7'}
+            strokeWidth={1}
+            dash={[6, 4]}
+          />
+          {master && !options.visitedMasters?.has(master.id)
+            ? renderNode(master, null, {
+                interactive: false,
+                keyPrefix: `${keyPrefix}${sourceElement.id}`,
+                visitedMasters: new Set([...(options.visitedMasters ?? []), master.id]),
+                forcePosition: { x: 0, y: 0 },
+              })
+            : null}
+        </Group>
+      );
+    }
+
+    const children = getElementChildren(elements, sourceElement.id);
+    const displayElement = {
+      ...sourceElement,
+      id: `${keyPrefix}${sourceElement.id}`,
+      x: displayPosition.x,
+      y: displayPosition.y,
+    };
+    const draggable = interactive && sourceElement.type !== 'instance';
+
+    if (sourceElement.type === 'artboard') {
+      const childOptions: RenderOptions = {
+        ...options,
+        forcePosition: undefined,
+      };
       return (
         <ArtboardShape
-          key={element.id}
+          key={displayElement.id}
           element={displayElement}
           isSelected={isSelected}
-          draggable={draggable}
+          draggable={draggable && pageDragEnabled}
+          interactive={interactive}
           onDragEnd={handleDragEnd}
           onSelect={handleSelect}
         >
-          {children.map((child) => renderNode(child, element))}
+          {children.map((child) => renderNode(child, sourceElement, childOptions))}
         </ArtboardShape>
       );
     }
 
-    if (element.type === 'container') {
+    if (sourceElement.type === 'container') {
+      const childOptions: RenderOptions = {
+        ...options,
+        forcePosition: undefined,
+      };
       return (
         <ContainerShape
-          key={element.id}
+          key={displayElement.id}
           element={displayElement}
           isSelected={isSelected}
           draggable={draggable}
+          interactive={interactive}
           onDragEnd={handleDragEnd}
           onSelect={handleSelect}
-          visualBounds={getVisualBoundsForContainer(element, elements, renderedRects)}
+          visualBounds={getVisualBoundsForContainer(sourceElement, elements, renderedRects)}
         >
-          {children.map((child) => renderNode(child, element))}
+          {children.map((child) => renderNode(child, sourceElement, childOptions))}
         </ContainerShape>
       );
     }
 
-    if (element.type === 'box') {
+    if (sourceElement.type === 'box') {
+      const childOptions: RenderOptions = {
+        ...options,
+        forcePosition: undefined,
+      };
       return (
         <BoxShape
-          key={element.id}
+          key={displayElement.id}
           element={displayElement}
           isSelected={isSelected}
           draggable={draggable}
+          interactive={interactive}
           onDragEnd={handleDragEnd}
           onSelect={handleSelect}
-          visualBounds={getVisualBoundsForContainer(element, elements, renderedRects)}
+          visualBounds={getVisualBoundsForContainer(sourceElement, elements, renderedRects)}
         >
-          {children.map((child) => renderNode(child, element))}
+          {children.map((child) => renderNode(child, sourceElement, childOptions))}
         </BoxShape>
       );
     }
 
-    const ShapeComponent = leafShapes[element.type];
+    const ShapeComponent = leafShapes[sourceElement.type];
     if (!ShapeComponent) {
       return null;
     }
 
     return (
       <ShapeComponent
-        key={element.id}
+        key={displayElement.id}
         element={displayElement}
         isSelected={isSelected}
         draggable={draggable}
+        interactive={interactive}
         onDragEnd={handleDragEnd}
         onSelect={handleSelect}
       />
@@ -567,90 +770,214 @@ export default function CanvasArea({ width, height, stageRef }: CanvasAreaProps)
       ? buildSelectionRect(selectionStart, selectionCurrent)
       : null;
 
+  const canGroup = selectedIds.filter((id) => {
+    const element = elementById.get(id);
+    return Boolean(element && element.type !== 'artboard');
+  }).length >= 2;
+  const selectedElement = selectedIds[0] ? elementById.get(selectedIds[0]) ?? null : null;
+  const canUngroup = selectedElement?.type === 'container' && selectedIds.length === 1;
+
+  const closeContextMenu = () => setContextMenu(null);
+
+  const handleExportPng = async () => {
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+
+    const previousSelection = selectedIds;
+    setSelection([]);
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+
+    try {
+      const dataUrl = stage.toDataURL({ pixelRatio: 2 });
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = 'wireframe-export.png';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } finally {
+      setSelection(previousSelection);
+    }
+  };
+
   return (
-    <Stage
-      ref={stageRef}
-      width={width}
-      height={height}
-      onMouseDown={(event) => {
-        if (event.target === event.target.getStage()) {
-          handleBackgroundMouseDown(event);
-        }
-      }}
-      scaleX={stageScale}
-      scaleY={stageScale}
-      x={stagePos.x}
-      y={stagePos.y}
-      onWheel={(event) => {
-        event.evt.preventDefault();
-
-        const stage = stageRef.current;
-        const pointer = stage?.getPointerPosition();
-        if (!stage || !pointer) {
-          return;
-        }
-
-        const oldScale = stageScale;
-        const pointerWorld = {
-          x: (pointer.x - stagePos.x) / oldScale,
-          y: (pointer.y - stagePos.y) / oldScale,
-        };
-
-        const scaleBy = 1.1;
-        const direction = event.evt.deltaY > 0 ? 1 : -1;
-        const nextScale = direction > 0 ? oldScale / scaleBy : oldScale * scaleBy;
-        const clampedScale = Math.max(0.2, Math.min(4, nextScale));
-
-        setStageScale(clampedScale);
-        setStagePos({
-          x: pointer.x - pointerWorld.x * clampedScale,
-          y: pointer.y - pointerWorld.y * clampedScale,
-        });
-      }}
-    >
-      <Layer>
-        {rootArtboards.map((artboard) => renderNode(artboard, null))}
-        {selectionRect ? (
-          <Rect
-            x={selectionRect.x}
-            y={selectionRect.y}
-            width={selectionRect.width}
-            height={selectionRect.height}
-            fill="rgba(59,130,246,0.15)"
-            stroke="#3b82f6"
-            strokeWidth={1}
-            dash={[4, 4]}
-            listening={false}
-          />
-        ) : null}
-        <Transformer
-          ref={transformerRef}
-          rotateEnabled={false}
-          flipEnabled={false}
-          enabledAnchors={
-            selectedIds.length === 1
-              ? [
-                  'top-left',
-                  'top-center',
-                  'top-right',
-                  'middle-right',
-                  'bottom-right',
-                  'bottom-center',
-                  'bottom-left',
-                  'middle-left',
-                ]
-              : []
+    <div className="relative h-full w-full">
+      <Stage
+        ref={stageRef}
+        width={width}
+        height={height}
+        onMouseDown={(event) => {
+          if (event.evt.button !== 0) {
+            return;
           }
-          boundBoxFunc={(oldBox, newBox) => {
-            if (newBox.width < 12 || newBox.height < 12) {
-              return oldBox;
-            }
 
-            return newBox;
+          if (event.target === event.target.getStage()) {
+            handleBackgroundMouseDown(event);
+          }
+        }}
+        onContextMenu={openContextMenu}
+        scaleX={stageScale}
+        scaleY={stageScale}
+        x={stagePos.x}
+        y={stagePos.y}
+        onWheel={(event) => {
+          event.evt.preventDefault();
+
+          const stage = stageRef.current;
+          const pointer = stage?.getPointerPosition();
+          if (!stage || !pointer) {
+            return;
+          }
+
+          const oldScale = stageScale;
+          const pointerWorld = {
+            x: (pointer.x - stagePos.x) / oldScale,
+            y: (pointer.y - stagePos.y) / oldScale,
+          };
+
+          const scaleBy = 1.1;
+          const direction = event.evt.deltaY > 0 ? 1 : -1;
+          const nextScale = direction > 0 ? oldScale / scaleBy : oldScale * scaleBy;
+          const clampedScale = Math.max(0.2, Math.min(4, nextScale));
+
+          setStageScale(clampedScale);
+          setStagePos({
+            x: pointer.x - pointerWorld.x * clampedScale,
+            y: pointer.y - pointerWorld.y * clampedScale,
+          });
+        }}
+      >
+        <Layer>
+          {rootArtboards.map((artboard) => renderNode(artboard, null))}
+          {selectionRect ? (
+            <Rect
+              x={selectionRect.x}
+              y={selectionRect.y}
+              width={selectionRect.width}
+              height={selectionRect.height}
+              fill="rgba(59,130,246,0.15)"
+              stroke="#3b82f6"
+              strokeWidth={1}
+              dash={[4, 4]}
+              listening={false}
+            />
+          ) : null}
+          <Transformer
+            ref={transformerRef}
+            rotateEnabled={false}
+            flipEnabled={false}
+            enabledAnchors={
+              selectedIds.length === 1
+                ? [
+                    'top-left',
+                    'top-center',
+                    'top-right',
+                    'middle-right',
+                    'bottom-right',
+                    'bottom-center',
+                    'bottom-left',
+                    'middle-left',
+                  ]
+                : []
+            }
+            boundBoxFunc={(oldBox, newBox) => {
+              if (newBox.width < 12 || newBox.height < 12) {
+                return oldBox;
+              }
+
+              return newBox;
+            }}
+            onTransformEnd={handleTransformEnd}
+          />
+        </Layer>
+      </Stage>
+
+      {contextMenu ? (
+        <div
+          className="fixed z-50 min-w-40 rounded-md border border-zinc-200 bg-white p-1 shadow-lg"
+          style={{
+            left: Math.min(contextMenu.clientX, window.innerWidth - 180),
+            top: Math.min(contextMenu.clientY, window.innerHeight - 140),
           }}
-          onTransformEnd={handleTransformEnd}
-        />
-      </Layer>
-    </Stage>
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              copy();
+              closeContextMenu();
+            }}
+            className="w-full rounded px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100"
+          >
+            Copy
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              pasteAt(contextMenu.worldPoint, contextMenu.targetParentId);
+              setSelection([]);
+              closeContextMenu();
+            }}
+            className="w-full rounded px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100"
+          >
+            Paste
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              pasteAt(contextMenu.worldPoint, contextMenu.targetParentId);
+              setSelection([]);
+              closeContextMenu();
+            }}
+            className="w-full rounded px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100"
+          >
+            Paste on Top
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void handleExportPng();
+              closeContextMenu();
+            }}
+            className="w-full rounded px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100"
+          >
+            Export as Image
+          </button>
+          <button
+            type="button"
+            disabled={!canGroup}
+            onClick={() => {
+              groupSelected(selectedIds);
+              closeContextMenu();
+            }}
+            className="w-full rounded px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Group
+          </button>
+          <button
+            type="button"
+            disabled={!canUngroup}
+            onClick={() => {
+              if (selectedElement?.type === 'container') {
+                ungroupSelected(selectedElement.id);
+              }
+              closeContextMenu();
+            }}
+            className="w-full rounded px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Ungroup
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }

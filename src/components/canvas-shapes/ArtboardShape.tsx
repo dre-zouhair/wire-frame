@@ -10,23 +10,33 @@ export default function ArtboardShape({
   element,
   isSelected,
   draggable = true,
+  interactive = true,
   onDragEnd,
   onSelect,
   children,
 }: ArtboardShapeProps) {
+  const isInteractive = interactive !== false;
   return (
     <Group
       id={element.id}
       x={element.x}
       y={element.y}
-      draggable={draggable}
+      draggable={draggable && isInteractive}
+      listening={isInteractive}
       onDragStart={(e) => {
         e.cancelBubble = true;
       }}
       onDragMove={(e) => {
         e.cancelBubble = true;
       }}
-      onDragEnd={(e) => onDragEnd(element.id, e.target.x(), e.target.y())}
+      onDragEnd={(e) => {
+        if (e.target.id() !== element.id) {
+          e.cancelBubble = true;
+          return;
+        }
+
+        onDragEnd(element.id, e.target.x(), e.target.y());
+      }}
       clipX={0}
       clipY={0}
       clipWidth={element.width}
@@ -36,7 +46,7 @@ export default function ArtboardShape({
         width={element.width}
         height={element.height}
         fill="#ffffff"
-        stroke={isSelected ? '#111111' : '#2f2f2f'}
+        stroke={isSelected ? '#111111' : element.isMasterComponent ? '#a855f7' : '#2f2f2f'}
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
         shadowColor="#000000"
         shadowBlur={22}

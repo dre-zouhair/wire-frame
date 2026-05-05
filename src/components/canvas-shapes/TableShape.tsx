@@ -1,13 +1,15 @@
 import { Group, Line, Rect } from 'react-konva';
 import type { ShapeProps } from './types';
-import { resolveStrokeWidth } from './shared';
+import { resolveStrokeColor, resolveStrokeWidth } from './shared';
 
 export default function TableShape({
   element,
   draggable = true,
+  interactive = true,
   onDragEnd,
   onSelect,
 }: ShapeProps) {
+  const isInteractive = interactive !== false;
   const rows = Math.max(1, element.rows ?? 3);
   const cols = Math.max(1, element.cols ?? 3);
   const rowHeight = element.height / rows;
@@ -36,7 +38,8 @@ export default function TableShape({
       id={element.id}
       x={element.x}
       y={element.y}
-      draggable={draggable}
+      draggable={draggable && isInteractive}
+      listening={isInteractive}
       onDragStart={(e) => {
         e.cancelBubble = true;
       }}
@@ -57,7 +60,7 @@ export default function TableShape({
         width={element.width}
         height={element.height}
         fill="#ffffff"
-        stroke="#333333"
+        stroke={resolveStrokeColor(element, false, '#333333')}
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
         cornerRadius={element.borderRadius ?? 0}
       />

@@ -5,10 +5,19 @@ import {
   resolveFontStyle,
   resolveKonvaAlign,
   resolveReadableTextColor,
+  resolveStrokeColor,
   resolveStrokeWidth,
 } from './shared';
 
-export default function CheckboxShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
+export default function CheckboxShape({
+  element,
+  isSelected,
+  draggable = true,
+  interactive = true,
+  onDragEnd,
+  onSelect,
+}: ShapeProps) {
+  const isInteractive = interactive !== false;
   const boxSize = 16;
 
   return (
@@ -16,7 +25,8 @@ export default function CheckboxShape({ element, isSelected, draggable = true, o
       id={element.id}
       x={element.x}
       y={element.y}
-      draggable={draggable}
+      draggable={draggable && isInteractive}
+      listening={isInteractive}
       onDragStart={(e) => {
         e.cancelBubble = true;
       }}
@@ -39,7 +49,7 @@ export default function CheckboxShape({ element, isSelected, draggable = true, o
         width={boxSize}
         height={boxSize}
         fill="#ffffff"
-        stroke={isSelected ? '#111111' : '#555555'}
+        stroke={resolveStrokeColor(element, isSelected, '#555555')}
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
       />
       {element.checked ? (

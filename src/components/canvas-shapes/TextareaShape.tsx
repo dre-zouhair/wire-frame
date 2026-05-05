@@ -1,4 +1,4 @@
-import { Group, Rect, RegularPolygon, Text } from 'react-konva';
+import { Group, Rect, Text } from 'react-konva';
 import type { ShapeProps } from './types';
 import {
   resolveFill,
@@ -10,7 +10,7 @@ import {
   resolveStrokeWidth,
 } from './shared';
 
-export default function DropdownShape({
+export default function TextareaShape({
   element,
   isSelected,
   draggable = true,
@@ -19,6 +19,8 @@ export default function DropdownShape({
   onSelect,
 }: ShapeProps) {
   const isInteractive = interactive !== false;
+  const displayText = element.text ?? 'Textarea';
+
   return (
     <Group
       id={element.id}
@@ -46,9 +48,9 @@ export default function DropdownShape({
         width={element.width}
         height={element.height}
         fill={resolveFill(element.fill)}
-        stroke={resolveStrokeColor(element, isSelected, '#8a8a8a')}
+        stroke={resolveStrokeColor(element, isSelected, '#7a7a7a')}
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
-        cornerRadius={element.borderRadius ?? 3}
+        cornerRadius={element.borderRadius ?? 4}
         shadowEnabled={isSelected}
         shadowColor="#000000"
         shadowBlur={12}
@@ -56,24 +58,17 @@ export default function DropdownShape({
       />
       <Text
         x={10}
-        y={0}
-        width={element.width - 28}
-        height={element.height}
-        text={element.text ?? 'Dropdown'}
+        y={8}
+        width={Math.max(0, element.width - 20)}
+        height={Math.max(0, element.height - 16)}
+        text={displayText}
         fontSize={resolveFontSize(element.fontSize, 16)}
         fontStyle={resolveFontStyle(element.fontWeight)}
         fontFamily="Arial, sans-serif"
         fill={resolveReadableTextColor(element.fill)}
         align={resolveKonvaAlign(element.textAlign ?? 'left')}
-        verticalAlign="middle"
-      />
-      <RegularPolygon
-        x={element.width - 14}
-        y={element.height / 2 - 1}
-        sides={3}
-        radius={5}
-        fill={resolveStrokeColor(element, isSelected, '#666666')}
-        rotation={180}
+        verticalAlign="top"
+        wrap="word"
       />
     </Group>
   );

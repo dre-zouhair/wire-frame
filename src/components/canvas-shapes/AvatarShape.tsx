@@ -1,13 +1,15 @@
 import { Circle, Group, Text } from 'react-konva';
 import type { ShapeProps } from './types';
-import { resolveStrokeWidth } from './shared';
+import { resolveStrokeColor, resolveStrokeWidth } from './shared';
 
 export default function AvatarShape({
   element,
   draggable = true,
+  interactive = true,
   onDragEnd,
   onSelect,
 }: ShapeProps) {
+  const isInteractive = interactive !== false;
   const radius = Math.min(element.width, element.height) / 2;
 
   return (
@@ -15,7 +17,8 @@ export default function AvatarShape({
       id={element.id}
       x={element.x}
       y={element.y}
-      draggable={draggable}
+      draggable={draggable && isInteractive}
+      listening={isInteractive}
       onDragStart={(e) => {
         e.cancelBubble = true;
       }}
@@ -37,7 +40,7 @@ export default function AvatarShape({
         y={radius}
         radius={radius}
         fill="#f3f4f6"
-        stroke="#333333"
+        stroke={resolveStrokeColor(element, false, '#333333')}
         strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
       />
       <Text

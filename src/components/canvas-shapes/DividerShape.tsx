@@ -1,8 +1,16 @@
 import { Line } from 'react-konva';
 import type { ShapeProps } from './types';
-import { resolveStrokeWidth } from './shared';
+import { resolveStrokeColor, resolveStrokeWidth } from './shared';
 
-export default function DividerShape({ element, isSelected, draggable = true, onDragEnd, onSelect }: ShapeProps) {
+export default function DividerShape({
+  element,
+  isSelected,
+  draggable = true,
+  interactive = true,
+  onDragEnd,
+  onSelect,
+}: ShapeProps) {
+  const isInteractive = interactive !== false;
   const horizontal = element.width >= element.height;
 
   return (
@@ -11,9 +19,10 @@ export default function DividerShape({ element, isSelected, draggable = true, on
       x={element.x}
       y={element.y}
       points={horizontal ? [0, element.height / 2, element.width, element.height / 2] : [element.width / 2, 0, element.width / 2, element.height]}
-      stroke={isSelected ? '#111111' : '#d4d4d4'}
+      stroke={resolveStrokeColor(element, isSelected, '#d4d4d4')}
       strokeWidth={resolveStrokeWidth(element.strokeWidth, 1)}
-      draggable={draggable}
+      draggable={draggable && isInteractive}
+      listening={isInteractive}
       onDragStart={(e) => {
         e.cancelBubble = true;
       }}
